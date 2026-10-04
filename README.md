@@ -6,6 +6,22 @@ A small plugin for Claude Code that puts a Q-version maid mascot above the promp
 
 > **Tested version / 已测试版本：Claude Code 2.1.286** (desktop). Other versions are untested. The terminal layout has only been checked by automated tests, not by eye. 其他版本未验证；终端版只在自动化测试里验证过，没有实际观察。
 
+## 截图 / Screenshots
+
+日常状态：小人、CTX / 5H / 7D 进度条、重置倒计时、缓存命中率、今日统计、好感度。
+
+![main](docs/main.png)
+
+成就面板：按分类折叠，已解锁和未解锁分开显示，未解锁的显示进度和奖励。
+
+![achievements](docs/achievements.png)
+
+番茄钟专注中，以及压缩上下文时的专属姿势：
+
+![focus](docs/focus.png)
+
+![compact](docs/compact.png)
+
 ## 这是什么
 
 一个放在 Claude Code 输入框上方的桌宠（橙发 Q 版女仆）。她会根据 Claude 的状态做出反应，顺便把额度用量显示出来，还有好感度、成就、番茄钟这些小玩意。
