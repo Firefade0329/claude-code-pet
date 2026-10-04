@@ -88,6 +88,10 @@ Windows 路径要写成 `D:\\path\\to\\pet`。新装或更新后，新开的对�
 - 好感度、成就、统计、连续天数保存在 Claude Code 的插件存档里（`~/.claude/plugins/store/` 下以插件名命名的 JSON 文件），所有对话共用。想重置，删掉该文件即可。
 - 插件不联网，只读取自己的 `assets/` 图片，并通过 Claude Code 的插件接口读写存档。
 
+## 版本更新
+
+每个版本改了什么，见 [CHANGELOG.md](CHANGELOG.md)。
+
 ## 开发
 
 ```bash
