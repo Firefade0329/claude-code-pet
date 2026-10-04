@@ -1,0 +1,11 @@
+{
+  "name": "pet",
+  "version": "0.3.0",
+  "description": "Maid mascot in the prompt band: reacts to Claude state, shows CTX/5H/7D usage, keeps an affection counter.",
+  "types": "./types/index.d.ts",
+  "author": {
+    "name": "Firefade0329"
+  },
+  "license": "MIT",
+  "repository": "https://github.com/Firefade0329/claude-code-pet"
+}

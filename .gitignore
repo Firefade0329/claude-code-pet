@@ -1,0 +1,3 @@
+.claude-plugin/types/
+*.b64
+tsconfig.json

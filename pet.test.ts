@@ -1,0 +1,449 @@
+﻿import { test, expect, mock } from 'claude-code/testing'
+
+const PROPS = { hasSurvey: false, isWorking: false, maxRows: 20, bodyColumns: 120, scroll: { offset: 0, bodyRows: 20 }, view: {} } as any
+const mount = ($: any, surface: 'desktop' | 'terminal') => $.ui.mount({ plugin: 'pet', surface, component: 'AbovePrompt', props: PROPS })
+
+let toastSink: string[] | null = null
+// everything beneath the plugin that a real session would answer
+async function engine($: any, on: any, entries?: Record<string, unknown>) {
+  const clock = mock.clock(on)
+  mock.store(on, entries)
+  on('ui.toast', (_: any, e: any) => { toastSink?.push(e.text); return { value: undefined } as any })
+  on('fs.read', () => ({ value: { base64: 'AAAA' } } as any))
+  on('session.start', () => ({ cwd: 'D:/test' } as any))
+  on('turn.start', (_: any, e: any) => ({ turnId: e.turnId } as any))
+  on('turn.complete', () => ({ text: '' } as any))
+  on('tool.call', () => ({ result: 'ok' } as any))
+  on('classic.PermissionRequest', () => ({}))
+  await clock.set(1_700_000_000_000)      // a realistic time of day (the mock clock would start at 0)
+  return clock
+}
+const count = async (m: any, text: RegExp | string) => (await m.findAll({ type: 'Text', text })).length
+const countBtn = async (m: any, text: RegExp | string) => (await m.findAll({ type: 'Button', text })).length
+
+for (const surface of ['desktop', 'terminal'] as const) {
+  test(`band draws on ${surface}`, async ($, on) => {
+    engine($, on)
+    expect(await mount($, surface)).toBeDefined()
+  })
+}
+
+test('pat: reacts, adds affection (capped per day), then clears by itself', async ($, on) => {
+  const clock = await engine($, on)
+  const m = await mount($, 'desktop')
+  const patLine = /这、这样不太合规矩|谢、谢谢主人|请不要这样，主人|主人的手好温暖/
+  await $.ui.press({ plugin: 'pet', key: 'pat' })
+  expect(await count(m, patLine)).toBe(1)
+  await clock.advance(3000)
+  expect(await count(m, patLine)).toBe(0)
+  for (let i = 0; i < 6; i++) {
+    await $.ui.press({ plugin: 'pet', key: 'pat' })
+    await clock.advance(3000)
+  }
+  // 7 pats in total, only the first 5 add affection
+  expect(await count(m, 'Lv.1 · 5')).toBe(1)
+})
+
+test('poke: shows its reaction, then returns to the normal line', async ($, on) => {
+  const clock = await engine($, on)
+  const m = await mount($, 'desktop')
+  const pokeLine = /呀！主人有何吩咐|请问有什么事吗|请不要吓我|（探头）/
+  await $.ui.press({ plugin: 'pet', key: 'poke' })
+  expect(await count(m, pokeLine)).toBe(1)
+  await clock.advance(3000)
+  expect(await count(m, pokeLine)).toBe(0)
+})
+
+test('wait: only a real permission dialog makes the pet wait; the tool call that follows ends it', async ($, on) => {
+  await engine($, on)
+  const m = await mount($, 'desktop')
+  const waitLine = /需要您确认|请您过目|等候您的指示/
+  expect(await count(m, waitLine)).toBe(0)
+  await $.classic.PermissionRequest({ tool_name: 'Bash', tool_input: { command: 'ls' } } as any)
+  expect(await count(m, waitLine)).toBe(1)
+  await $.tool.call({ tool: 'Bash', tool_use_id: 't1', command: 'ls' } as any)
+  expect(await count(m, waitLine)).toBe(0)
+})
+
+test('sleep: falls asleep after 5 quiet minutes, wakes up on a poke', async ($, on) => {
+  const clock = await engine($, on)
+  const m = await mount($, 'desktop')
+  await $.session.start({ source: 'startup', cwd: 'D:/test' } as any)
+  const sleepLine = /轻轻打盹|稍微休息一下|Zzz/
+  await clock.advance(4 * 60 * 1000)
+  expect(await count(m, sleepLine)).toBe(0)
+  await clock.advance(2 * 60 * 1000)
+  expect(await count(m, sleepLine)).toBe(1)
+  await $.ui.press({ plugin: 'pet', key: 'poke' })
+  expect(await count(m, sleepLine)).toBe(0)
+})
+
+test('rest: after an hour of steady work the pet asks for a break, "知道啦" quiets it', async ($, on) => {
+  const clock = await engine($, on)
+  const m = await mount($, 'desktop')
+  await $.session.start({ source: 'startup', cwd: 'D:/test' } as any)
+  const restLine = /连续工作一小时|休息一下对身体好|已工作一小时/
+  for (let i = 0; i < 5; i++) {
+    await $.turn.start({ text: 'hi', turnId: 't' + i } as any)
+    await clock.advance(10 * 60 * 1000)
+  }
+  expect(await count(m, restLine)).toBe(0)
+  await $.turn.start({ text: 'hi', turnId: 'tx' } as any)
+  await clock.advance(10 * 60 * 1000 + 30000)
+  expect(await count(m, restLine)).toBe(1)
+  await $.ui.press({ plugin: 'pet', key: 'rest' })
+  expect(await count(m, restLine)).toBe(0)
+})
+
+test('focus: 25 minute timer counts down, finishes by itself and counts a tomato', async ($, on) => {
+  const clock = await engine($, on)
+  const m = await mount($, 'desktop')
+  await $.ui.press({ plugin: 'pet', key: 'focus' })
+  expect(await countBtn(m, /放弃专注 · 剩 25 分/)).toBe(1)
+  await clock.advance(26 * 60 * 1000)
+  expect(await countBtn(m, /放弃专注/)).toBe(0)
+  expect(await countBtn(m, /1 番茄/)).toBe(1)
+})
+
+test('achievements: the first finished turn unlocks one', async ($, on) => {
+  await engine($, on)
+  const m = await mount($, 'desktop')
+  expect(await countBtn(m, /成就 0\/\d+/)).toBe(1)
+  await $.turn.complete({ reason: 'answer', answer: '', durationMs: 1000, isAborted: false, turnId: 't1' } as any)
+  expect(await countBtn(m, /成就 1\/\d+/)).toBe(1)
+})
+
+
+
+test('greet: the pet greets right after the start, then settles to idle', async ($, on) => {
+  const clock = await engine($, on)
+  const m = await mount($, 'desktop')
+  await $.session.start({ source: 'startup', cwd: 'D:/test' } as any)
+  const hello = /早上好|中午好|下午好|晚上好|夜深了|欢迎回来|主人，您来了/
+  expect(await count(m, hello)).toBe(1)
+  await clock.advance(9000)
+  expect(await count(m, hello)).toBe(0)
+})
+
+test('streak: a session left open overnight counts the next day on its first prompt', async ($, on) => {
+  const clock = await engine($, on)
+  const m = await mount($, 'desktop')
+  await $.session.start({ source: 'startup', cwd: 'D:/test' } as any)
+  await clock.advance(24 * 60 * 60 * 1000 + 60000)
+  expect(await count(m, /连续第 2 天/)).toBe(0)
+  await $.turn.start({ text: 'hi', turnId: 'n1' } as any)
+  expect(await count(m, /连续第 2 天/)).toBe(1)
+})
+
+
+
+test('long task: a 3 minute turn leaves a pose and a line that stay until the next prompt', async ($, on) => {
+  const clock = await engine($, on)
+  const m = await mount($, 'desktop')
+  await $.turn.complete({ reason: 'answer', answer: '', durationMs: 180000, isAborted: false, turnId: 'L1' } as any)
+  await clock.advance(60000)
+  expect(await count(m, /3 分钟/)).toBe(1)
+  await $.turn.start({ text: 'next', turnId: 'L2' } as any)
+  expect(await count(m, /3 分钟/)).toBe(0)
+})
+
+test('demo command: /pet rest shows the reminder button', async ($, on) => {
+  await engine($, on)
+  const m = await mount($, 'desktop')
+  await $.command.run({ command: 'pet', args: 'rest', origin: { kind: 'composer' }, presentation: {} } as any)
+  expect(await countBtn(m, /知道啦/)).toBe(1)
+})
+
+
+test('shared store: points earned in another conversation are not overwritten', async ($, on) => {
+  await engine($, on, { affection: 100 })      // this conversation has not loaded it (its own value is still 0)
+  const m = await mount($, 'desktop')
+  await $.ui.press({ plugin: 'pet', key: 'pat' })
+  expect(await count(m, /Lv\.5/)).toBe(1)      // 100 + 1 = 101 points, not 0 + 1
+})
+
+test('usage warning: shows once when 5H crosses 80%, can be dismissed, goes away by itself after 5 minutes', async ($, on) => {
+  const clock = await engine($, on)
+  on('session.measure', (_: any, e: any) => ({ changed: e.changed } as any))
+  const m = await mount($, 'desktop')
+  const warnLine = /五小时额度/
+  const measure = (p: number, at = '2030-01-01T00:00:00Z') => $.session.measure({ context: { window: 1000000 }, rateLimits: [{ kind: 'five_hour', percentUsed: p, resetsAt: at }], changed: ['rateLimits'] } as any)
+  await measure(70)
+  expect(await count(m, warnLine)).toBe(0)
+  await measure(82)
+  expect(await count(m, warnLine)).toBe(1)
+  await $.ui.press({ plugin: 'pet', key: 'warnok' })
+  expect(await count(m, warnLine)).toBe(0)
+  await measure(85)                       // still above: no second warning
+  expect(await count(m, warnLine)).toBe(0)
+  await measure(60)                       // clearly below: armed again
+  await measure(90)                       // ...but it is the same reset cycle, already warned about
+  expect(await count(m, warnLine)).toBe(0)
+  await measure(60, '2030-01-01T05:00:00Z')
+  await measure(90, '2030-01-01T05:00:00Z')      // a new cycle warns again
+  expect(await count(m, warnLine)).toBe(1)
+  await $.session.start({ source: 'startup', cwd: 'D:/test' } as any)
+  await clock.advance(6 * 60 * 1000)      // not dismissed: gone after 5 minutes
+  expect(await count(m, warnLine)).toBe(0)
+})
+
+
+test('level up: crossing a level shows its line and pose', async ($, on) => {
+  await engine($, on, { affection: 7 })
+  const m = await mount($, 'desktop')
+  await $.ui.press({ plugin: 'pet', key: 'pat' })      // 7 + 1 = 8 points = level 2
+  expect(await count(m, /提升到 Lv\.2/)).toBe(1)
+})
+
+test('usage warning: a cycle already warned about in another conversation stays quiet', async ($, on) => {
+  await engine($, on, { warned5: Date.parse('2030-01-01T00:00:00Z') })
+  on('session.measure', (_: any, e: any) => ({ changed: e.changed } as any))
+  const m = await mount($, 'desktop')
+  await $.session.measure({ context: { window: 1000000 }, rateLimits: [{ kind: 'five_hour', percentUsed: 90, resetsAt: '2030-01-01T00:00:00Z' }], changed: ['rateLimits'] } as any)
+  expect(await count(m, /五小时额度/)).toBe(0)
+})
+
+test('narrow window: the right-hand info columns are dropped', async ($, on) => {
+  await engine($, on)
+  const wide = await mount($, 'desktop')
+  expect(await count(wide, /5H 重置/)).toBe(1)
+  const narrow = await $.ui.mount({ plugin: 'pet', surface: 'desktop', component: 'AbovePrompt', props: { ...PROPS, bodyColumns: 60 } })
+  expect(await count(narrow, /5H 重置/)).toBe(0)
+})
+
+test('break: a finished focus timer starts a 5 minute break; pats do not end it, a prompt does', async ($, on) => {
+  const clock = await engine($, on)
+  const m = await mount($, 'desktop')
+  const brk = /请放松一下|请稍作休息|休息中休息中|五分钟，什么都不用想|好好歇一会儿|喝口水/
+  await $.ui.press({ plugin: 'pet', key: 'focus' })
+  await clock.advance(26 * 60 * 1000)
+  expect(await countBtn(m, /结束休息/)).toBe(1)
+  await clock.advance(10000)
+  expect(await count(m, brk)).toBe(1)
+  await $.ui.press({ plugin: 'pet', key: 'pat' })
+  await clock.advance(5000)
+  expect(await countBtn(m, /结束休息/)).toBe(1)
+  await $.turn.start({ text: 'hi', turnId: 'b1' } as any)
+  expect(await countBtn(m, /结束休息/)).toBe(0)
+})
+
+test('break: ends by itself after 5 minutes', async ($, on) => {
+  const clock = await engine($, on)
+  const m = await mount($, 'desktop')
+  await $.ui.press({ plugin: 'pet', key: 'focus' })
+  await clock.advance(26 * 60 * 1000)
+  expect(await countBtn(m, /结束休息/)).toBe(1)
+  await clock.advance(5 * 60 * 1000)
+  expect(await countBtn(m, /结束休息/)).toBe(0)
+})
+
+test('summary: the today button opens a panel with the numbers', async ($, on) => {
+  await engine($, on)
+  const m = await mount($, 'desktop')
+  await $.turn.complete({ reason: 'answer', answer: '', durationMs: 1000, isAborted: false, turnId: 's1' } as any)
+  expect(await count(m, /今日小结/)).toBe(0)
+  await $.ui.press({ plugin: 'pet', key: 'sum' })
+  expect(await count(m, /今日小结/)).toBe(1)
+  expect(await count(m, /对话 1 轮/)).toBe(1)
+})
+
+test('compact: the pet shows the compaction while it runs, and says when it is done', async ($, on) => {
+  const during = /整理对话记录|压缩中，请勿打扰|整理中整理中|把记忆压一压|在帮你整理记忆|重要的我都会留着/
+  let m: any
+  let seen = -1
+  on('session.compact', async () => {
+    seen = await count(m, during)
+    return { messages: [{ role: 'user', text: 'summary', toolUses: [], toolResults: [] }], tokensBefore: 100000, tokensAfter: 20000 } as any
+  })
+  await engine($, on)
+  m = await mount($, 'desktop')
+  await $.session.compact({ trigger: 'manual', messages: [{ role: 'user', text: 'hi', toolUses: [], toolResults: [] }] } as any)
+  expect(seen).toBe(1)
+  expect(await count(m, /整理完毕|压缩完成|整理好啦|腾出好多空间|整理好了|轻松多啦|轻装上阵/)).toBe(1)
+  expect(await count(m, during)).toBe(0)
+})
+
+test('compact button: shows from 80% context, fills /compact for the person to confirm', async ($, on) => {
+  let filled = ''
+  on('prompt.fill', (_: any, e: any) => { filled = e.text; return { isFilled: true } as any })
+  on('session.measure', (_: any, e: any) => ({ changed: e.changed } as any))
+  await engine($, on)
+  const m = await mount($, 'desktop')
+  const measure = (p: number) => $.session.measure({ context: { window: 1000000, percent: p }, rateLimits: [], changed: ['context'] } as any)
+  await measure(60)
+  expect(await countBtn(m, /压缩上下文/)).toBe(0)
+  await measure(82)
+  expect(await countBtn(m, /压缩上下文/)).toBe(1)
+  await $.ui.press({ plugin: 'pet', key: 'compact' })
+  expect(filled).toBe('/compact ')
+})
+
+
+// ---------- achievements ----------
+const press = ($: any, key: string) => $.ui.press({ plugin: 'pet', key })
+const hasText = async (m: any, re: RegExp) => (await count(m, re)) > 0
+
+test('achievements: the panel is grouped; unlocked and locked ones are listed apart, locked ones show progress', async ($, on) => {
+  await engine($, on)
+  const m = await mount($, 'desktop')
+  await $.turn.complete({ reason: 'answer', answer: '', durationMs: 1000, isAborted: false, turnId: 'a1' } as any)
+  await press($, 'ach')
+  expect(await countBtn(m, /对话与工具 1\/8/)).toBe(1)
+  expect(await countBtn(m, /隐藏 0\/4/)).toBe(1)
+  await press($, 'ag-chat')
+  expect(await hasText(m, /✓ 初次见面/)).toBe(true)
+  expect(await hasText(m, /· 小有成就.*1\/100/)).toBe(true)
+})
+
+test('achievements: hidden ones are not revealed until unlocked', async ($, on) => {
+  await engine($, on)
+  const m = await mount($, 'desktop')
+  await press($, 'ach')
+  await press($, 'ag-secret')
+  expect(await hasText(m, /别吵醒我|戳戳戳|不听劝|全部收集/)).toBe(false)
+  expect(await hasText(m, /还有 4 个隐藏成就/)).toBe(true)
+})
+
+test('achievements: an unlock gives its affection reward once (first = +2)', async ($, on) => {
+  await engine($, on)
+  const m = await mount($, 'desktop')
+  await $.turn.complete({ reason: 'answer', answer: '', durationMs: 1000, isAborted: false, turnId: 'r1' } as any)
+  expect(await count(m, /Lv\.1 · 3\//)).toBe(1)      // a finished turn gives 1, the "first" achievement 2
+  await $.turn.complete({ reason: 'answer', answer: '', durationMs: 1000, isAborted: false, turnId: 'r2' } as any)
+  expect(await count(m, /Lv\.1 · 4\//)).toBe(1)
+})
+
+test('achievements: 5 quick pokes unlock the hidden 戳戳戳, 50 pokes unlock 戳戳乐', async ($, on) => {
+  const clock = await engine($, on)
+  const m = await mount($, 'desktop')
+  for (let i = 0; i < 5; i++) await press($, 'poke')
+  await press($, 'ach')
+  await press($, 'ag-secret')
+  expect(await hasText(m, /✓ 戳戳戳/)).toBe(true)
+  for (let i = 0; i < 45; i++) {
+    await clock.advance(11000)
+    await press($, 'poke')
+  }
+  await press($, 'ag-play')
+  expect(await hasText(m, /✓ 戳戳乐/)).toBe(true)
+})
+
+test('achievements: poking her awake 10 times unlocks 别吵醒我', async ($, on) => {
+  const clock = await engine($, on)
+  const m = await mount($, 'desktop')
+  await $.session.start({ source: 'startup', cwd: 'D:/test' } as any)
+  for (let i = 0; i < 10; i++) {
+    await clock.advance(6 * 60 * 1000)
+    await press($, 'poke')
+  }
+  await press($, 'ach')
+  await press($, 'ag-secret')
+  expect(await hasText(m, /✓ 别吵醒我/)).toBe(true)
+})
+
+test('achievements: carrying on 5 times while the rest reminder is on unlocks 不听劝', async ($, on) => {
+  await engine($, on)
+  const m = await mount($, 'desktop')
+  await $.turn.start({ text: 'hi', turnId: 'w0' } as any)      // work has started, so a reminder can come
+  await $.command.run({ command: 'pet', args: 'rest', origin: { kind: 'composer' }, presentation: {} } as any)
+  for (let i = 0; i < 5; i++) await $.turn.start({ text: 'hi', turnId: 'i' + i } as any)
+  await press($, 'ach')
+  await press($, 'ag-secret')
+  expect(await hasText(m, /✓ 不听劝/)).toBe(true)
+})
+
+test('achievements: errors, 95% usage and a full break unlock theirs', async ($, on) => {
+  const clock = await engine($, on)
+  on('session.measure', (_: any, e: any) => ({ changed: e.changed } as any))
+  const m = await mount($, 'desktop')
+  for (let i = 0; i < 10; i++) await $.turn.complete({ reason: 'error', answer: '', durationMs: 1000, isAborted: false, turnId: 'e' + i } as any)
+  await $.session.measure({ context: { window: 1000000 }, rateLimits: [{ kind: 'five_hour', percentUsed: 96, resetsAt: '2030-01-01T00:00:00Z' }], changed: ['rateLimits'] } as any)
+  await press($, 'focus')
+  await clock.advance(26 * 60 * 1000)
+  await clock.advance(5 * 60 * 1000 + 2000)
+  await press($, 'ach')
+  await press($, 'ag-misc')
+  expect(await hasText(m, /✓ 屡败屡战/)).toBe(true)
+  expect(await hasText(m, /✓ 极限操作/)).toBe(true)
+  await press($, 'ag-focus')
+  expect(await hasText(m, /✓ 好好休息/)).toBe(true)
+})
+
+test('achievements: old saved stats without the newer counters still load and count on', async ($, on) => {
+  await engine($, on, { stats: { turns: 99, tools: 5, pats: 0, focus: 0, night: 0, longest: 0 }, achieved: ['first'] })
+  const m = await mount($, 'desktop')
+  await $.session.start({ source: 'startup', cwd: 'D:/test' } as any)
+  await $.turn.complete({ reason: 'answer', answer: '', durationMs: 1000, isAborted: false, turnId: 'o1' } as any)
+  await press($, 'ach')
+  await press($, 'ag-chat')
+  expect(await hasText(m, /✓ 小有成就/)).toBe(true)      // 99 + 1 = 100
+})
+
+test('achievements: many unlocked at once give one toast, not a flood', async ($, on) => {
+  const toasts: string[] = []
+  toastSink = toasts
+  await engine($, on, { stats: { turns: 600, tools: 1200, pats: 60, focus: 12, night: 1, longest: 700000 }, achieved: [] })
+  await mount($, 'desktop')
+  await press($, 'poke')
+  expect(toasts.filter(t => /一口气解锁了/.test(t)).length).toBe(1)
+  expect(toasts.filter(t => /^达成成就|^成就解锁|^新成就/.test(t)).length).toBe(0)
+})
+
+test('achievements: unlocking the last ordinary one unlocks 全部收集', async ($, on) => {
+  await engine($, on, {
+    stats: { turns: 3000, tools: 5000, pats: 500, focus: 50, night: 1, longest: 31 * 60000, pokes: 50, compacts: 10, breaks: 10, errors: 10, peak: 1, wakes: 0, bursts: 0, ignored: 0 },
+    streak: { last: '2000-1-1', n: 100, max: 100 },
+    affection: 1700,
+    today: { d: dayKey(new Date(1_700_000_000_000)), turns: 50, tools: 0, pats: 0, focus: 0 },
+    achieved: [],
+  })
+  const m = await mount($, 'desktop')
+  await press($, 'poke')
+  await press($, 'ach')
+  await press($, 'ag-secret')
+  expect(await hasText(m, /✓ 全部收集/)).toBe(true)
+})
+
+// ---------- real time, several conversations, arithmetic ----------
+const dayKey = (d: Date) => `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`
+
+test('time: yesterday means the previous calendar day, whatever the length of today', async ($, on) => {
+  const y = new Date(1_700_000_000_000)
+  y.setDate(y.getDate() - 1)
+  await engine($, on, { streak: { last: dayKey(y), n: 4, max: 4 } })
+  const m = await mount($, 'desktop')
+  await $.turn.start({ text: 'hi', turnId: 'd1' } as any)
+  expect(await count(m, /连续第 5 天/)).toBe(1)
+})
+
+test('several conversations: pats already used up today in another conversation are not paid again', async ($, on) => {
+  const clock = await engine($, on, { today: { d: dayKey(new Date(1_700_000_000_000)), turns: 0, tools: 0, pats: 5, focus: 0 }, affection: 10, streak: { last: dayKey(new Date(1_700_000_000_000)), n: 1, max: 1 } })
+  const m = await mount($, 'desktop')
+  await $.session.start({ source: 'startup', cwd: 'D:/test' } as any)
+  await clock.advance(1000)
+  expect(await count(m, /Lv\.2 · 10\//)).toBe(1)
+  await press($, 'pat')
+  expect(await count(m, /Lv\.2 · 10\//)).toBe(1)      // 10 stays 10: no point for a 6th pat of the day
+})
+
+test('several conversations: a day already counted by another conversation is not counted again', async ($, on) => {
+  const toasts: string[] = []
+  toastSink = toasts
+  await engine($, on, { streak: { last: dayKey(new Date(1_700_000_000_000)), n: 3, max: 3 } })
+  await mount($, 'desktop')
+  await $.turn.start({ text: 'hi', turnId: 'c1' } as any)
+  expect(toasts.filter(t => /连续第/.test(t)).length).toBe(0)
+})
+
+test('terminal: the same buttons work there (a reminder can be dismissed, pat and the achievements panel work)', async ($, on) => {
+  await engine($, on)
+  const m = await mount($, 'terminal')
+  await $.command.run({ command: 'pet', args: 'rest', origin: { kind: 'composer' }, presentation: {} } as any)
+  expect(await countBtn(m, /知道啦/)).toBe(1)
+  await press($, 'rest')
+  expect(await countBtn(m, /知道啦/)).toBe(0)
+  await press($, 'pat')
+  expect(await count(m, /\(done|\(idle|♥Lv\.1/)).toBeGreaterThan(0)
+  await press($, 'ach')
+  expect(await countBtn(m, /对话与工具 0\/8/)).toBe(1)
+})
