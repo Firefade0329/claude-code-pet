@@ -4,6 +4,8 @@ A small plugin for Claude Code that puts a Q-version maid mascot above the promp
 
 > **Language note:** all in-app text (her lines, buttons, achievements) is **Chinese (简体中文)** for now. It is an unofficial community plugin and is not affiliated with Anthropic.
 
+> **Tested version / 已测试版本：Claude Code 2.1.286** (desktop). Other versions are untested. The terminal layout has only been checked by automated tests, not by eye. 其他版本未验证；终端版只在自动化测试里验证过，没有实际观察。
+
 ## 这是什么
 
 一个放在 Claude Code 输入框上方的桌宠（橙发 Q 版女仆）。她会根据 Claude 的状态做出反应，顺便把额度用量显示出来，还有好感度、成就、番茄钟这些小玩意。
