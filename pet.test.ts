@@ -10,7 +10,7 @@ async function engine($: any, on: any, entries?: Record<string, unknown>) {
   mock.store(on, entries)
   on('ui.toast', (_: any, e: any) => { toastSink?.push(e.text); return { value: undefined } as any })
   on('fs.read', () => ({ value: { base64: 'AAAA' } } as any))
-  on('session.start', () => ({ cwd: 'D:/test' } as any))
+  on('session.start', () => ({ cwd: '/test' } as any))
   on('turn.start', (_: any, e: any) => ({ turnId: e.turnId } as any))
   on('turn.complete', () => ({ text: '' } as any))
   on('tool.call', () => ({ result: 'ok' } as any))
@@ -68,7 +68,7 @@ test('wait: only a real permission dialog makes the pet wait; the tool call that
 test('sleep: falls asleep after 5 quiet minutes, wakes up on a poke', async ($, on) => {
   const clock = await engine($, on)
   const m = await mount($, 'desktop')
-  await $.session.start({ source: 'startup', cwd: 'D:/test' } as any)
+  await $.session.start({ source: 'startup', cwd: '/test' } as any)
   const sleepLine = /轻轻打盹|稍微休息一下|Zzz/
   await clock.advance(4 * 60 * 1000)
   expect(await count(m, sleepLine)).toBe(0)
@@ -81,7 +81,7 @@ test('sleep: falls asleep after 5 quiet minutes, wakes up on a poke', async ($, 
 test('rest: after an hour of steady work the pet asks for a break, "知道啦" quiets it', async ($, on) => {
   const clock = await engine($, on)
   const m = await mount($, 'desktop')
-  await $.session.start({ source: 'startup', cwd: 'D:/test' } as any)
+  await $.session.start({ source: 'startup', cwd: '/test' } as any)
   const restLine = /连续工作一小时|休息一下对身体好|已工作一小时/
   for (let i = 0; i < 5; i++) {
     await $.turn.start({ text: 'hi', turnId: 't' + i } as any)
@@ -118,7 +118,7 @@ test('achievements: the first finished turn unlocks one', async ($, on) => {
 test('greet: the pet greets right after the start, then settles to idle', async ($, on) => {
   const clock = await engine($, on)
   const m = await mount($, 'desktop')
-  await $.session.start({ source: 'startup', cwd: 'D:/test' } as any)
+  await $.session.start({ source: 'startup', cwd: '/test' } as any)
   const hello = /早上好|中午好|下午好|晚上好|夜深了|欢迎回来|主人，您来了/
   expect(await count(m, hello)).toBe(1)
   await clock.advance(9000)
@@ -128,7 +128,7 @@ test('greet: the pet greets right after the start, then settles to idle', async 
 test('streak: a session left open overnight counts the next day on its first prompt', async ($, on) => {
   const clock = await engine($, on)
   const m = await mount($, 'desktop')
-  await $.session.start({ source: 'startup', cwd: 'D:/test' } as any)
+  await $.session.start({ source: 'startup', cwd: '/test' } as any)
   await clock.advance(24 * 60 * 60 * 1000 + 60000)
   expect(await count(m, /连续第 2 天/)).toBe(0)
   await $.turn.start({ text: 'hi', turnId: 'n1' } as any)
@@ -182,7 +182,7 @@ test('usage warning: shows once when 5H crosses 80%, can be dismissed, goes away
   await measure(60, '2030-01-01T05:00:00Z')
   await measure(90, '2030-01-01T05:00:00Z')      // a new cycle warns again
   expect(await count(m, warnLine)).toBe(1)
-  await $.session.start({ source: 'startup', cwd: 'D:/test' } as any)
+  await $.session.start({ source: 'startup', cwd: '/test' } as any)
   await clock.advance(6 * 60 * 1000)      // not dismissed: gone after 5 minutes
   expect(await count(m, warnLine)).toBe(0)
 })
@@ -331,7 +331,7 @@ test('achievements: 5 quick pokes unlock the hidden 戳戳戳, 50 pokes unlock �
 test('achievements: poking her awake 10 times unlocks 别吵醒我', async ($, on) => {
   const clock = await engine($, on)
   const m = await mount($, 'desktop')
-  await $.session.start({ source: 'startup', cwd: 'D:/test' } as any)
+  await $.session.start({ source: 'startup', cwd: '/test' } as any)
   for (let i = 0; i < 10; i++) {
     await clock.advance(6 * 60 * 1000)
     await press($, 'poke')
@@ -372,7 +372,7 @@ test('achievements: errors, 95% usage and a full break unlock theirs', async ($,
 test('achievements: old saved stats without the newer counters still load and count on', async ($, on) => {
   await engine($, on, { stats: { turns: 99, tools: 5, pats: 0, focus: 0, night: 0, longest: 0 }, achieved: ['first'] })
   const m = await mount($, 'desktop')
-  await $.session.start({ source: 'startup', cwd: 'D:/test' } as any)
+  await $.session.start({ source: 'startup', cwd: '/test' } as any)
   await $.turn.complete({ reason: 'answer', answer: '', durationMs: 1000, isAborted: false, turnId: 'o1' } as any)
   await press($, 'ach')
   await press($, 'ag-chat')
@@ -419,7 +419,7 @@ test('time: yesterday means the previous calendar day, whatever the length of to
 test('several conversations: pats already used up today in another conversation are not paid again', async ($, on) => {
   const clock = await engine($, on, { today: { d: dayKey(new Date(1_700_000_000_000)), turns: 0, tools: 0, pats: 5, focus: 0 }, affection: 10, streak: { last: dayKey(new Date(1_700_000_000_000)), n: 1, max: 1 } })
   const m = await mount($, 'desktop')
-  await $.session.start({ source: 'startup', cwd: 'D:/test' } as any)
+  await $.session.start({ source: 'startup', cwd: '/test' } as any)
   await clock.advance(1000)
   expect(await count(m, /Lv\.2 · 10\//)).toBe(1)
   await press($, 'pat')
