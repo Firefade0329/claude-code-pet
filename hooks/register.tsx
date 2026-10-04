@@ -667,6 +667,7 @@ async function startFocus($: any) {
   const lvl = levelOf(await read($, affection))
   await update($, breakEnd, () => 0)      // a new timer ends the break
   await update($, focusEnd, () => now + FOCUS_MS)
+  if ((await read($, mode)) === 'sleep') await setMode($, 'idle')      // starting a timer wakes her
   await flash($, say('focusStart', lvl, now / 1000), 'start')
   $.clock.after(FOCUS_MS + 500, async () => {
     await finishFocus($, now + FOCUS_MS)
@@ -897,7 +898,8 @@ export const register: Register = on => {
       const m = await read($, mode)
       const t = await read($, since)
       const now = await $.clock.now()
-      if (m === 'idle' && now - t > SLEEP_AFTER_MS) await setMode($, 'sleep')
+      const focusing = (await read($, focusEnd)) > 0      // she keeps you company during a focus timer instead of dozing off
+      if (m === 'idle' && !focusing && now - t > SLEEP_AFTER_MS) await setMode($, 'sleep')
       const lim = POSE_MS[m]
       if (lim !== undefined && now - t > lim) await setMode($, 'idle')
       const ws = await read($, workStart)
@@ -1149,12 +1151,14 @@ export const register: Register = on => {
     const sumBtn = <Button key="sum" label={`今日 ${gone.turns} 轮 · ${gone.tools} 工具 · ${gone.focus} 番茄 ${sum ? '▾' : '▸'}`} plain dimColor onPress={() => { update($, showSum, v => !v); update($, showAch, () => false) }} />
     const achBtn = <Button key="ach" label={`成就 ${have.length}/${ACHS.length} ${open ? '▾' : '▸'}`} plain dimColor onPress={() => { update($, showAch, v => !v); update($, showSum, () => false) }} />
     const btnRow = (
-      <Box flexDirection="row" gap={2} flexWrap="wrap">
+      <Box flexDirection="row" gap={2} flexWrap={e.surface === 'desktop' ? 'nowrap' : 'wrap'}>
         <Button key="pat" label="摸摸头" plain dimColor onPress={() => react($, 'pat')} />
         <Button key="poke" label="戳一下" plain dimColor onPress={() => react($, 'poke')} />
-        {fe > 0
-          ? <Button key="focus" label={`放弃专注 · 剩 ${focusLeft} 分`} plain dimColor onPress={() => cancelFocus($)} />
-          : <Button key="focus" label="专注 25 分钟" plain dimColor onPress={() => startFocus($)} />}
+        {be > 0
+          ? null      // during the break the row shows "结束休息" instead (keeps the row as short as while a timer runs)
+          : fe > 0
+            ? <Button key="focus" label={`放弃专注 · 剩 ${focusLeft} 分`} plain dimColor onPress={() => cancelFocus($)} />
+            : <Button key="focus" label="专注 25 分钟" plain dimColor onPress={() => startFocus($)} />}
         {c !== null && c >= COMPACT_BTN_AT && m !== 'compact' ? <Button key="compact" label="压缩上下文" plain dimColor onPress={() => fillCompact($)} /> : null}
         {be > 0 ? <Button key="brk" label={`结束休息 · 剩 ${breakLeft} 分`} plain dimColor onPress={() => endBreak($)} /> : null}
         {due ? <Button key="rest" label="知道啦" plain onPress={() => dismissRemind($)} /> : null}

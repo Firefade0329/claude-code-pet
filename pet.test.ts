@@ -447,3 +447,29 @@ test('terminal: the same buttons work there (a reminder can be dismissed, pat an
   await press($, 'ach')
   expect(await countBtn(m, /对话与工具 0\/8/)).toBe(1)
 })
+
+test('focus: she does not fall asleep during a focus timer, and starting one wakes her', async ($, on) => {
+  const clock = await engine($, on)
+  const m = await mount($, 'desktop')
+  await $.session.start({ source: 'startup', cwd: '/test' } as any)
+  const sleepLine = /轻轻打盹|稍微休息一下|Zzz|主人不在的时候|再眯一会儿|打哈欠|睡着前最后一句|梦里也在等你|你回来了就叫我|靠着桌子睡着/
+  await clock.advance(6 * 60 * 1000)
+  expect(await count(m, sleepLine)).toBe(1)            // asleep after 5 quiet minutes
+  await press($, 'focus')
+  await clock.advance(1000)
+  expect(await count(m, sleepLine)).toBe(0)            // starting the timer woke her
+  await clock.advance(10 * 60 * 1000)
+  expect(await count(m, sleepLine)).toBe(0)            // 10 quiet minutes later she is still awake
+  expect(await countBtn(m, /放弃专注/)).toBe(1)
+})
+
+test('break: the button row stays short (no focus button next to the break button)', async ($, on) => {
+  const clock = await engine($, on)
+  const m = await mount($, 'desktop')
+  await press($, 'focus')
+  await clock.advance(26 * 60 * 1000)
+  expect(await countBtn(m, /结束休息/)).toBe(1)
+  expect(await countBtn(m, /专注 25 分钟|放弃专注/)).toBe(0)
+  await press($, 'brk')
+  expect(await countBtn(m, /专注 25 分钟/)).toBe(1)      // ending the break brings the focus button back
+})
