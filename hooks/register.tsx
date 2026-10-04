@@ -91,6 +91,8 @@ const LONG_TOAST_MS = 10000            // how long the long-task, rest-reminder 
 const REST_AFTER_MS = 60 * 60 * 1000      // "you have been working for an hour"
 const WORK_GAP_MS = 15 * 60 * 1000        // a break this long starts a new stretch of work
 const FOCUS_MS = 25 * 60 * 1000
+const BUILD_INFO = 'v0.3.1 · built 2026-10-04 15:36'      // filled in by build.py: tells which build a conversation has loaded (/pet version)
+let demoBreakEnd = 0      // end time of a break started by the /pet break demo
 let lastLimits = ''      // what was last written to the store as 'limits' / 'cacheHit' by this conversation (no write when nothing changed)
 let lastHit = -1
 const BREAK_MS = 5 * 60 * 1000
@@ -717,7 +719,7 @@ async function finishBreak($: any, end: number) {
   const lvl = levelOf(await read($, affection))
   await update($, breakEnd, () => 0)
   await update($, workStart, () => 0)      // a real rest: the hour of steady work starts over
-  await bumpStats($, { breaks: 1 })
+  if (end !== demoBreakEnd) await bumpStats($, { breaks: 1 })      // (the /pet break demo is not counted)
   const line = say('breakDone', lvl, end / 1000)
   $.ui.toast(line, { timeoutMs: LONG_TOAST_MS })
   await flash($, line, 'greet', 8000)
@@ -810,7 +812,7 @@ async function restoreSaved($: any) {
 // declared once, when the session starts
 async function registerDemo($: any) {
   try {
-    await $.command.register({ name: 'pet', description: '演示桌宠的提醒和姿势', argumentHint: '[long|rest|ach|hello|focus|break|compact|warn|level|start|cancel]' })
+    await $.command.register({ name: 'pet', description: '演示桌宠的提醒和姿势', argumentHint: '[long|rest|ach|hello|focus|break|compact|warn|level|start|cancel|version]' })
   } catch (err) {
     // the demo command is optional
   }
@@ -871,8 +873,10 @@ async function demo($: any, what: string): Promise<string> {
     })
     return '演示：压缩中 15 秒，然后显示整理完毕'
   }
+  if (what === 'version') return '桌宠 ' + BUILD_INFO
   if (what === 'break') {
     const end = now + 60000
+    demoBreakEnd = end
     await update($, breakEnd, () => end)
     $.clock.after(60500, async () => { await finishBreak($, end) })
     return '演示：休息 1 分钟（发消息、点“结束休息”或开新番茄钟会提前结束，摸头和戳一下不会）'
@@ -883,7 +887,7 @@ async function demo($: any, what: string): Promise<string> {
     return '演示：番茄钟结束'
   }
   $.ui.toast('这就是弹出提示的样子，会停留 10 秒。', { timeoutMs: LONG_TOAST_MS })
-  return '用法：/pet long | rest | ach | hello | focus | break | compact | warn | level | start | cancel（只是演示，不计入任何统计）'
+  return '用法：/pet long | rest | ach | hello | focus | break | compact | warn | level | start | cancel | version（只是演示，不计入任何统计）'
 }
 
 export const register: Register = on => {

@@ -473,3 +473,22 @@ test('break: the button row stays short (no focus button next to the break butto
   await press($, 'brk')
   expect(await countBtn(m, /专注 25 分钟/)).toBe(1)      // ending the break brings the focus button back
 })
+
+test('demo: /pet break is not counted as a real break', async ($, on) => {
+  const clock = await engine($, on)
+  const m = await mount($, 'desktop')
+  await $.command.run({ command: 'pet', args: 'break', origin: { kind: 'composer' }, presentation: {} } as any)
+  expect(await countBtn(m, /结束休息/)).toBe(1)
+  await clock.advance(2 * 60 * 1000)
+  expect(await countBtn(m, /结束休息/)).toBe(0)
+  await press($, 'ach')
+  await press($, 'ag-focus')
+  expect(await hasText(m, /✓ 好好休息/)).toBe(false)
+})
+
+test('demo: /pet version tells which build is loaded', async ($, on) => {
+  await engine($, on)
+  await mount($, 'desktop')
+  const r: any = await $.command.run({ command: 'pet', args: 'version', origin: { kind: 'composer' }, presentation: {} } as any)
+  expect(JSON.stringify(r)).toMatch(/桌宠 v\d+\.\d+\.\d+ · built \d{4}-\d{2}-\d{2} \d{2}:\d{2}/)
+})

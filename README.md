@@ -48,7 +48,7 @@ A small plugin for Claude Code that puts a Q-version maid mascot above the promp
 
 **今日小结**：点右侧“今日 N 轮 …”展开当天和累计的统计。
 
-**演示命令**：`/pet <long|rest|ach|hello|focus|break|compact|warn|level N|start|cancel>` 可以预览各种提醒和姿势，不计入任何统计。
+**演示命令**：`/pet <long|rest|ach|hello|focus|break|compact|warn|level N|start|cancel|version>` 可以预览各种提醒和姿势，不计入任何统计。
 
 ## 安装
 
@@ -70,7 +70,7 @@ claude --plugin-dir /path/to/pet
 }
 ```
 
-Windows 路径要写成 `D:\\path\\to\\pet`。已经打开的对话不会热加载，需要新开对话或重启。
+Windows 路径要写成 `D:\\path\\to\\pet`。新装或更新后，新开的对话会自动加载；已经打开的对话可以在输入框里输入 `/reload-plugins` 立即加载，再用 `/pet version` 确认加载的是哪一次构建。
 
 ## 各界面的表现
 
