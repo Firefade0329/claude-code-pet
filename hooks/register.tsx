@@ -91,7 +91,7 @@ const LONG_TOAST_MS = 10000            // how long the long-task, rest-reminder 
 const REST_AFTER_MS = 60 * 60 * 1000      // "you have been working for an hour"
 const WORK_GAP_MS = 15 * 60 * 1000        // a break this long starts a new stretch of work
 const FOCUS_MS = 25 * 60 * 1000
-const BUILD_INFO = 'v0.3.3 · built 2026-10-08 06:27'      // filled in by build.py: tells which build a conversation has loaded (/pet version)
+const BUILD_INFO = 'v0.3.4 · built 2026-10-08 06:37'      // filled in by build.py: tells which build a conversation has loaded (/pet version)
 let demoRemind = false      // true while the reminder on screen comes from the /pet rest demo (continuing is not counted)
 let demoBreakEnd = 0      // end time of a break started by the /pet break demo
 let lastLimits = ''      // what was last written to the store as 'limits' / 'cacheHit' by this conversation (no write when nothing changed)
@@ -279,6 +279,22 @@ const helloText = (lvl: number, hour: number) => {
   return (T['hello' + stageOf(lvl)] as any)[slot][0] as string
 }
 
+// Numbers read back from the store may be missing or damaged (hand edited, written by another version): a bad value counts as 0.
+const num = (x: unknown): number => {
+  const n = Number(x)
+  return Number.isFinite(n) ? n : 0
+}
+
+// The pet's own bookkeeping must never stop the host's event (the person's turn, a compaction):
+// whatever goes wrong in there is swallowed, and the caller still passes the event on.
+async function quietly(fn: () => Promise<unknown>) {
+  try {
+    await fn()
+  } catch (err) {
+    // the pet is optional
+  }
+}
+
 // ---- lifetime counters ----
 // Stats saved by an older version lack the newer fields: they count from 0.
 const SUM_KEYS = ['turns', 'tools', 'pats', 'focus', 'night', 'pokes', 'compacts', 'breaks', 'errors', 'wakes', 'bursts', 'ignored'] as const
@@ -438,8 +454,8 @@ const POSE_MS: Partial<Record<PetMode, number>> = { done: DONE_FOR_MS, worry: 70
 async function setMode($: any, m: PetMode) {
   if ((await read($, mode)) === m) return          // already there: no write, so no redraw of the band
   const now = await $.clock.now()
+  await update($, since, () => now)      // `since` first: the 30 s check must never see the new mode with the old time
   await update($, mode, () => m)
-  await update($, since, () => now)
 }
 
 // a temporary pose (done / worry / greet) goes back to idle by itself
@@ -473,7 +489,7 @@ async function checkAchLocked($: any) {
   const s = normStats(stIn ?? (await read($, stats)))
   const skIn = (await $.store.get('streak')) as Streak | undefined
   const k = skIn && skIn.last ? skIn : await read($, streak)
-  const aff = Math.max(Number((await $.store.get('affection')) ?? 0), await read($, affection))
+  const aff = Math.max(num(await $.store.get('affection')), num(await read($, affection)))
   const lvl = levelOf(aff)
   const now = await $.clock.now()
   const tIn = (await $.store.get('today')) as Today | undefined
@@ -517,8 +533,8 @@ async function checkAch($: any) {
 }
 
 async function addAffectionLocked($: any, n: number): Promise<number[]> {
-  const stored = Number((await $.store.get('affection')) ?? 0)
-  const before = Math.max(stored, await read($, affection))      // another conversation may have added points meanwhile
+  const stored = num(await $.store.get('affection'))
+  const before = Math.max(stored, num(await read($, affection)))      // another conversation may have added points meanwhile
   const after = before + n
   await update($, affection, () => after)
   await $.store.set('affection', after)
@@ -570,6 +586,17 @@ async function bumpStats($: any, d: Partial<Stats>, check: boolean = true) {
 }
 
 // a click on one of the buttons: a short reaction on top of whatever the pet is doing
+// Is there still one of today's paid pats left? If so it is taken in the same locked step (a check and a count apart would let
+// ten quick clicks all pass the check). Returns whether this pat is paid.
+async function takePatLocked($: any, now: number): Promise<boolean> {
+  const st = (await $.store.get('today')) as Today | undefined
+  const t = st && st.d === dayOf(now) ? st : await read($, today)
+  const pats = t.d === dayOf(now) ? num(t.pats) : 0
+  if (pats >= PATS_PER_DAY) return false
+  await bumpTodayLocked($, 0, 0, 1, 0)
+  return true
+}
+
 let recentPokes: number[] = []
 async function react($: any, kind: 'pat' | 'poke') {
   const now = await $.clock.now()
@@ -581,11 +608,8 @@ async function react($: any, kind: 'pat' | 'poke') {
   if (wasAsleep) await setMode($, 'idle')
   if (kind === 'pat') {
     // today's pats are counted in the store: another conversation may have used some of the five already
-    const st = (await $.store.get('today')) as Today | undefined
-    const t = st && st.d === dayOf(now) ? st : await read($, today)
-    const pats = t.d === dayOf(now) ? (t.pats ?? 0) : 0
-    if (pats < PATS_PER_DAY) {
-      await bumpToday($, 0, 0, 1, 0)
+    const counted = await locked(() => takePatLocked($, now))
+    if (counted) {
       await bumpStats($, { pats: 1 }, false)
       await addAffection($, 1)
     } else {
@@ -686,7 +710,10 @@ async function cancelFocus($: any) {
 }
 
 // called by the timer, and by the 30 s check in case the timer was lost in a reload
+let finishingFocus = 0
 async function finishFocus($: any, endedAt: number) {
+  if (finishingFocus === endedAt) return
+  finishingFocus = endedAt
   if ((await read($, focusEnd)) !== endedAt) return
   const lvl = levelOf(await read($, affection))
   await update($, focusEnd, () => 0)
@@ -720,6 +747,7 @@ async function finishBreak($: any, end: number) {
   if ((await read($, breakEnd)) !== end) return
   const lvl = levelOf(await read($, affection))
   await update($, breakEnd, () => 0)
+  if ((await $.clock.now()) - end > LATE_FOCUS_MS) return      // the computer slept through it: no rest to count
   await update($, workStart, () => 0)      // a real rest: the hour of steady work starts over
   if (end !== demoBreakEnd) await bumpStats($, { breaks: 1 })      // (the /pet break demo is not counted)
   const line = say('breakDone', lvl, end / 1000)
@@ -738,10 +766,25 @@ const dayBefore = (ms: number) => {
 
 // `settleMs`: several conversations that start together (the app restarts with a few open) must not all count the same day:
 // each writes a claim, waits that long, and only the one whose claim is still there goes on.
+async function claimDayLocked($: any, now: number): Promise<Streak | null> {
+  const day = dayOf(now)
+  const sk = (await $.store.get('streak')) as Streak | undefined
+  const k: Streak = sk && sk.last ? { last: String(sk.last), n: num(sk.n), max: num(sk.max) } : await read($, streak)
+  if (k.last === day) {
+    await update($, streak, () => k)
+    return null
+  }
+  const n = k.last === dayBefore(now) ? k.n + 1 : 1
+  const nk: Streak = { last: day, n, max: Math.max(k.max, n) }
+  await update($, streak, () => nk)
+  await $.store.set('streak', nk)
+  return nk
+}
+
 async function dailyCheck($: any, now: number, settleMs: number = 0): Promise<string | null> {
   const day = dayOf(now)
   const sk = (await $.store.get('streak')) as Streak | undefined
-  const k = sk && sk.last ? sk : await read($, streak)
+  const k: Streak = sk && sk.last ? { last: String(sk.last), n: num(sk.n), max: num(sk.max) } : await read($, streak)
   if (k.last === day) {
     await update($, streak, () => k)
     return null
@@ -757,11 +800,10 @@ async function dailyCheck($: any, now: number, settleMs: number = 0): Promise<st
       return null
     }
   }
+  const nk = await locked(() => claimDayLocked($, now))
+  if (!nk) return null      // another step in this conversation counted today first
+  const n = nk.n
   const lvl = levelOf(await read($, affection))
-  const n = k.last === dayBefore(now) ? k.n + 1 : 1
-  const nk: Streak = { last: day, n, max: Math.max(k.max, n) }
-  await update($, streak, () => nk)
-  await $.store.set('streak', nk)
   let text = helloText(lvl, new Date(now).getHours())
   if (n >= 2) text += ' ' + say('streakLine', lvl, 0, { n })
   $.ui.toast(text)
@@ -773,7 +815,7 @@ async function dailyCheck($: any, now: number, settleMs: number = 0): Promise<st
 // session.start itself is awaited before the first prompt, so nothing slow may sit in it.
 async function restoreSaved($: any) {
   try {
-    const a = Number((await $.store.get('affection')) ?? 0)
+    const a = num(await $.store.get('affection'))
     await update($, affection, () => a)
     const have = (await $.store.get('achieved')) as string[] | undefined
     if (Array.isArray(have)) await update($, achieved, () => have)
@@ -945,25 +987,27 @@ export const register: Register = on => {
   })
 
   on('command.run', { command: 'pet' }, async ($, e) => {
-    return { text: await demo($, e.args.trim()) }
+    return { text: await demo($, (e.args ?? '').trim()) }
   })
 
   on('turn.start', async ($, e, next) => {
-    const now = await $.clock.now()
-    if ((await read($, remindDue)) && !demoRemind) await bumpStats($, { ignored: 1 })      // the break reminder is on and the person carries on
-    const ws = await read($, workStart)
-    const la = await read($, lastActive)
-    if (ws === 0 || now - la > WORK_GAP_MS) {
-      await update($, workStart, () => now)
-      await update($, nextRemind, () => now + REST_AFTER_MS)
-      await update($, remindDue, () => false)
-    }
-    await update($, lastActive, () => now)
-    await endBreak($)      // sending a prompt means back to work
-    await update($, reactKind, v => (v === 'flash' ? ('none' as ReactKind) : v))      // a held pose ends with the next prompt
-    const hello = await dailyCheck($, now)          // a session left open overnight still counts the new day
-    if (hello) await flash($, hello, 'greet')
-    await setMode($, 'think')
+    await quietly(async () => {
+      const now = await $.clock.now()
+      if ((await read($, remindDue)) && !demoRemind) await bumpStats($, { ignored: 1 })      // the break reminder is on and the person carries on
+      const ws = await read($, workStart)
+      const la = await read($, lastActive)
+      if (ws === 0 || now - la > WORK_GAP_MS) {
+        await update($, workStart, () => now)
+        await update($, nextRemind, () => now + REST_AFTER_MS)
+        await update($, remindDue, () => false)
+      }
+      await update($, lastActive, () => now)
+      await endBreak($)      // sending a prompt means back to work
+      await update($, reactKind, v => (v === 'flash' ? ('none' as ReactKind) : v))      // a held pose ends with the next prompt
+      const hello = await dailyCheck($, now)          // a session left open overnight still counts the new day
+      if (hello) await flash($, hello, 'greet')
+      await setMode($, 'think')
+    })
     return next(e)
   })
 
@@ -971,19 +1015,19 @@ export const register: Register = on => {
   // (tool.check answering 'ask' is NOT that: in Auto mode it just means "a model classifier decides",
   // which made the pet look like it was waiting almost all the time.)
   on('classic.PermissionRequest', async ($, e, next) => {
-    await setMode($, 'wait')
+    await quietly(() => setMode($, 'wait'))
     return next(e)
   })
 
   on('tool.call', async ($, e, next) => {
     toolsThisTurn += 1
     if (e.tool === 'AskUserQuestion') {
-      await setMode($, 'wait')
+      await quietly(() => setMode($, 'wait'))
       const r = await next(e)
-      await setMode($, 'work')
+      await quietly(() => setMode($, 'work'))
       return r
     }
-    await setMode($, 'work')
+    await quietly(() => setMode($, 'work'))
     return next(e)
   })
 
@@ -991,45 +1035,47 @@ export const register: Register = on => {
     if (e.agentId) return next(e)
     const tools = toolsThisTurn
     toolsThisTurn = 0
-    const now = await $.clock.now()
-    await update($, lastActive, () => now)
-    if (e.usage) {
-      const u = e.usage
-      const total = u.input_tokens + u.cache_read_input_tokens + u.cache_creation_input_tokens
-      if (total > 0) {
-        const r = (await read($, cacheRead)) + u.cache_read_input_tokens
-        const a = (await read($, cacheAll)) + total
-        await update($, cacheRead, () => r)
-        await update($, cacheAll, () => a)
-        const hit = Math.round((100 * r) / a)
-        await update($, cacheHit, () => hit)
-        await update($, cacheOld, () => false)
-        if (hit !== lastHit) {
-          lastHit = hit
-          await $.store.set('cacheHit', hit)
+    await quietly(async () => {
+      const now = await $.clock.now()
+      await update($, lastActive, () => now)
+      if (e.usage) {
+        const u = e.usage
+        const total = u.input_tokens + u.cache_read_input_tokens + u.cache_creation_input_tokens
+        if (total > 0) {
+          const r = (await read($, cacheRead)) + u.cache_read_input_tokens
+          const a = (await read($, cacheAll)) + total
+          await update($, cacheRead, () => r)
+          await update($, cacheAll, () => a)
+          const hit = Math.round((100 * r) / a)
+          await update($, cacheHit, () => hit)
+          await update($, cacheOld, () => false)
+          if (hit !== lastHit) {
+            lastHit = hit
+            await $.store.set('cacheHit', hit)
+          }
         }
       }
-    }
-    if (e.reason === 'answer') {
-      const lvl = levelOf(await read($, affection))
-      await bumpToday($, 1, tools, 0, 0)
-      const hour = new Date(now).getHours()
-      await bumpStats($, { turns: 1, tools, night: hour < 5 ? 1 : 0, longest: e.durationMs }, false)
-      await addAffection($, 1)
-      await setMode($, 'done')
-      await settleLater($, 'done')
-      if (e.durationMs >= LONG_TURN_MS) {
-        const longLine = say('longDone', lvl, now / 1000, { m: Math.max(1, Math.round(e.durationMs / 60000)) })
-        $.ui.toast(longLine, { timeoutMs: LONG_TOAST_MS })
-        await flash($, longLine, 'long', LONG_HOLD_MS)
+      if (e.reason === 'answer') {
+        const lvl = levelOf(await read($, affection))
+        await bumpToday($, 1, tools, 0, 0)
+        const hour = new Date(now).getHours()
+        await bumpStats($, { turns: 1, tools, night: hour < 5 ? 1 : 0, longest: e.durationMs }, false)
+        await addAffection($, 1)
+        await setMode($, 'done')
+        await settleLater($, 'done')
+        if (e.durationMs >= LONG_TURN_MS) {
+          const longLine = say('longDone', lvl, now / 1000, { m: Math.max(1, Math.round(e.durationMs / 60000)) })
+          $.ui.toast(longLine, { timeoutMs: LONG_TOAST_MS })
+          await flash($, longLine, 'long', LONG_HOLD_MS)
+        }
+      } else if (e.reason === 'error') {
+        await setMode($, 'worry')
+        await settleLater($, 'worry')
+        await bumpStats($, { errors: 1 })
+      } else {
+        await setMode($, 'idle')
       }
-    } else if (e.reason === 'error') {
-      await setMode($, 'worry')
-      await settleLater($, 'worry')
-      await bumpStats($, { errors: 1 })
-    } else {
-      await setMode($, 'idle')
-    }
+    })
     return next(e)
   })
 
@@ -1037,10 +1083,19 @@ export const register: Register = on => {
   // The silent "precompute" runs and subagents' own compactions are not shown.
   on('session.compact', async ($, e, next) => {
     if (e.trigger === 'precompute' || e.agentId) return next(e)
-    const before = await read($, mode)
-    await setMode($, 'compact')
+    let before: PetMode = 'idle'
+    await quietly(async () => {
+      before = await read($, mode)
+      await setMode($, 'compact')
+    })
+    let r: any
     try {
-      const r = await next(e)
+      r = await next(e)
+    } catch (err) {
+      await quietly(() => setMode($, 'idle'))
+      throw err
+    }
+    await quietly(async () => {
       const lvl = levelOf(await read($, affection))
       if (r.skip !== undefined) {
         await setMode($, before === 'compact' ? 'idle' : before)
@@ -1052,11 +1107,8 @@ export const register: Register = on => {
         await flash($, line, 'done', 8000)
         await bumpStats($, { compacts: 1 })
       }
-      return r
-    } catch (err) {
-      await setMode($, 'idle')
-      throw err
-    }
+    })
+    return r
   })
 
   on('session.measure', async ($, e, next) => {
@@ -1153,7 +1205,6 @@ export const register: Register = on => {
     const stt = await read($, stats)
     const focusLeft = fe > 0 ? Math.max(1, Math.ceil((fe - now) / 60000)) : 0
     const nextAt = lvl >= MAX_LEVEL ? 0 : THRESH[lvl]
-    const heart = lvl >= MAX_LEVEL ? `♥ Lv.${lvl} MAX` : `♥ Lv.${lvl} · ${aff}`
 
     const heartText = lvl >= MAX_LEVEL ? `♥ Lv.${lvl} MAX` : `♥ Lv.${lvl} · ${aff}/${nextAt}`
     const gone = sameDay ? td : { d: '', turns: 0, tools: 0, pats: 0, focus: 0 }
@@ -1161,7 +1212,7 @@ export const register: Register = on => {
 
     const narrow = e.props.bodyColumns < NARROW_COLS      // the right-hand columns do not fit: their two buttons go into the button row
     const sumBtn = <Button key="sum" label={`今日 ${gone.turns} 轮 · ${gone.tools} 工具 · ${gone.focus} 番茄 ${sum ? '▾' : '▸'}`} plain dimColor onPress={() => { update($, showSum, v => !v); update($, showAch, () => false) }} />
-    const achBtn = <Button key="ach" label={`成就 ${have.length}/${ACHS.length} ${open ? '▾' : '▸'}`} plain dimColor onPress={() => { update($, showAch, v => !v); update($, showSum, () => false) }} />
+    const achBtn = <Button key="ach" label={`成就 ${have.filter(id => ACHS.some(a => a.id === id)).length}/${ACHS.length} ${open ? '▾' : '▸'}`} plain dimColor onPress={() => { update($, showAch, v => !v); update($, showSum, () => false) }} />
     const btnRow = (
       <Box flexDirection="row" gap={2} flexWrap={e.surface === 'desktop' && !narrow ? 'nowrap' : 'wrap'}>
         <Button key="pat" label="摸摸头" plain dimColor onPress={() => react($, 'pat')} />

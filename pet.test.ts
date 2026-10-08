@@ -531,3 +531,89 @@ test('demo: carrying on after /pet rest is not counted as ignoring a real remind
   await press($, 'ag-secret')
   expect(await hasText(m, /✓ 不听劝/)).toBe(false)
 })
+
+// ---------- audit follow-ups (0.3.4) ----------
+test('pat: ten clicks at the same moment still pay only five', async ($, on) => {
+  await engine($, on)
+  const m = await mount($, 'desktop')
+  await Promise.all(Array.from({ length: 10 }, () => press($, 'pat')))
+  expect(await count(m, /Lv\.1 · 5\//)).toBe(1)
+})
+
+test('damaged saved numbers count as 0 instead of turning into null', async ($, on) => {
+  await engine($, on, { affection: 'abc', streak: { last: 'x', n: 'z', max: null }, today: { d: 'x', turns: 'q', tools: null, pats: 'p', focus: {} } })
+  const m = await mount($, 'desktop')
+  await press($, 'pat')
+  expect(await count(m, /null|NaN/)).toBe(0)
+  expect(await count(m, /Lv\.\d+ · \d+\//)).toBe(1)
+})
+
+test('check-in: the reward grows with the streak (3 + days - 1, at most 8) and a broken streak starts again at 3', async ($, on) => {
+  const day = (back: number) => {
+    const d = new Date(1_700_000_000_000)
+    d.setDate(d.getDate() - back)
+    return dayKey(d)
+  }
+  // yesterday was day 4 of a streak: today is day 5 -> 3 + 4 = 7 points (the "three days" achievement is already counted: max 4)
+  await engine($, on, { streak: { last: day(1), n: 4, max: 4 }, achieved: ['str3'] })
+  const m = await mount($, 'desktop')
+  await $.turn.start({ text: 'hi', turnId: 'ci1' } as any)
+  expect(await count(m, /Lv\.1 · 7\//)).toBe(1)
+})
+
+test('check-in: a broken streak starts again and pays 3', async ($, on) => {
+  const d = new Date(1_700_000_000_000)
+  d.setDate(d.getDate() - 3)
+  await engine($, on, { streak: { last: dayKey(d), n: 9, max: 9 }, achieved: ['str3', 'str7'] })
+  const m = await mount($, 'desktop')
+  await $.turn.start({ text: 'hi', turnId: 'ci2' } as any)
+  expect(await count(m, /Lv\.1 · 3\//)).toBe(1)
+})
+
+test('focus: pressing the button again gives the timer up', async ($, on) => {
+  await engine($, on)
+  const m = await mount($, 'desktop')
+  await press($, 'focus')
+  expect(await countBtn(m, /放弃专注/)).toBe(1)
+  await press($, 'focus')
+  expect(await countBtn(m, /放弃专注/)).toBe(0)
+  expect(await countBtn(m, /专注 25 分钟/)).toBe(1)
+})
+
+test('context warning: once at 85%, not again while it stays high, again after it fell clearly below', async ($, on) => {
+  const toasts: string[] = []
+  toastSink = toasts
+  await engine($, on)
+  on('session.measure', (_: any, e: any) => ({ changed: e.changed } as any))
+  const measure = (p: number) => $.session.measure({ context: { window: 1000000, percent: p }, rateLimits: [], changed: ['context'] } as any)
+  await mount($, 'desktop')
+  await measure(70)
+  const base = toasts.length
+  await measure(86)
+  expect(toasts.length).toBe(base + 1)
+  await measure(90)
+  expect(toasts.length).toBe(base + 1)
+  await measure(60)
+  await measure(88)
+  expect(toasts.length).toBe(base + 2)
+})
+
+test('compaction: when it is skipped nothing is celebrated or counted', async ($, on) => {
+  let m: any
+  on('session.compact', async () => ({ skip: 'nothing to do' } as any))
+  await engine($, on)
+  m = await mount($, 'desktop')
+  await $.session.compact({ trigger: 'manual', messages: [{ role: 'user', text: 'hi', toolUses: [], toolResults: [] }] } as any)
+  expect(await count(m, /整理完毕|压缩完成|整理好啦|腾出好多空间|整理好了|轻松多啦|轻装上阵/)).toBe(0)
+  await press($, 'ach')
+  await press($, 'ag-misc')
+  expect(await hasText(m, /✓ 轻装上阵/)).toBe(false)
+})
+
+test('an achievement id that no longer exists is not counted in the shown total', async ($, on) => {
+  await engine($, on, { achieved: ['first', 'removed-long-ago'] })
+  const m = await mount($, 'desktop')
+  await $.session.start({ source: 'startup', cwd: '/test' } as any)
+  await $.turn.start({ text: 'hi', turnId: 'x1' } as any)
+  expect(await countBtn(m, /成就 1\/38/)).toBe(1)
+})
