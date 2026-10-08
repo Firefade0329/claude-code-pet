@@ -91,7 +91,7 @@ const LONG_TOAST_MS = 10000            // how long the long-task, rest-reminder 
 const REST_AFTER_MS = 60 * 60 * 1000      // "you have been working for an hour"
 const WORK_GAP_MS = 15 * 60 * 1000        // a break this long starts a new stretch of work
 const FOCUS_MS = 25 * 60 * 1000
-const BUILD_INFO = 'v0.3.1 · built 2026-10-04 15:36'      // filled in by build.py: tells which build a conversation has loaded (/pet version)
+const BUILD_INFO = 'v0.3.2 · built 2026-10-08 05:52'      // filled in by build.py: tells which build a conversation has loaded (/pet version)
 let demoBreakEnd = 0      // end time of a break started by the /pet break demo
 let lastLimits = ''      // what was last written to the store as 'limits' / 'cacheHit' by this conversation (no write when nothing changed)
 let lastHit = -1
@@ -906,6 +906,9 @@ export const register: Register = on => {
       if (m === 'idle' && !focusing && now - t > SLEEP_AFTER_MS) await setMode($, 'sleep')
       const lim = POSE_MS[m]
       if (lim !== undefined && now - t > lim) await setMode($, 'idle')
+      // a turn that is still running counts as activity: otherwise one task longer than the 15 minute gap ends the stretch of work
+      // (and the one-hour reminder never comes). Waiting for a permission answer does not count.
+      if (m === 'work' || m === 'think') await update($, lastActive, () => now)
       const ws = await read($, workStart)
       const la = await read($, lastActive)
       const nr = await read($, nextRemind)
