@@ -91,7 +91,8 @@ const LONG_TOAST_MS = 10000            // how long the long-task, rest-reminder 
 const REST_AFTER_MS = 60 * 60 * 1000      // "you have been working for an hour"
 const WORK_GAP_MS = 15 * 60 * 1000        // a break this long starts a new stretch of work
 const FOCUS_MS = 25 * 60 * 1000
-const BUILD_INFO = 'v0.3.2 · built 2026-10-08 05:52'      // filled in by build.py: tells which build a conversation has loaded (/pet version)
+const BUILD_INFO = 'v0.3.3 · built 2026-10-08 06:27'      // filled in by build.py: tells which build a conversation has loaded (/pet version)
+let demoRemind = false      // true while the reminder on screen comes from the /pet rest demo (continuing is not counted)
 let demoBreakEnd = 0      // end time of a break started by the /pet break demo
 let lastLimits = ''      // what was last written to the store as 'limits' / 'cacheHit' by this conversation (no write when nothing changed)
 let lastHit = -1
@@ -637,6 +638,7 @@ async function dismissWarn($: any) {
 
 // "I have read it" on the one-hour reminder
 async function dismissRemind($: any) {
+  demoRemind = false
   const now = await $.clock.now()
   const lvl = levelOf(await read($, affection))
   await update($, remindDue, () => false)
@@ -829,6 +831,7 @@ async function demo($: any, what: string): Promise<string> {
   }
   if (what === 'rest') {
     $.ui.toast(say('rest', lvl, now / 1000), { timeoutMs: LONG_TOAST_MS })
+    demoRemind = true
     await update($, remindDue, () => true)
     return '演示：连续工作提醒（出现“知道啦”按钮，点它就消失）'
   }
@@ -916,6 +919,7 @@ export const register: Register = on => {
         await update($, workStart, () => 0)
         await update($, remindDue, () => false)
       } else if (ws > 0 && now >= nr && !(await read($, remindDue))) {
+        demoRemind = false
         await update($, remindDue, () => true)
         $.ui.toast(say('rest', levelOf(await read($, affection)), now / 1000), { timeoutMs: LONG_TOAST_MS })
       }
@@ -946,7 +950,7 @@ export const register: Register = on => {
 
   on('turn.start', async ($, e, next) => {
     const now = await $.clock.now()
-    if (await read($, remindDue)) await bumpStats($, { ignored: 1 })      // the break reminder is on and the person carries on
+    if ((await read($, remindDue)) && !demoRemind) await bumpStats($, { ignored: 1 })      // the break reminder is on and the person carries on
     const ws = await read($, workStart)
     const la = await read($, lastActive)
     if (ws === 0 || now - la > WORK_GAP_MS) {
@@ -1155,10 +1159,11 @@ export const register: Register = on => {
     const gone = sameDay ? td : { d: '', turns: 0, tools: 0, pats: 0, focus: 0 }
     const achCtx: Ctx = { s: normStats(stt), k: sk, lvl, today: gone, have }
 
+    const narrow = e.props.bodyColumns < NARROW_COLS      // the right-hand columns do not fit: their two buttons go into the button row
     const sumBtn = <Button key="sum" label={`今日 ${gone.turns} 轮 · ${gone.tools} 工具 · ${gone.focus} 番茄 ${sum ? '▾' : '▸'}`} plain dimColor onPress={() => { update($, showSum, v => !v); update($, showAch, () => false) }} />
     const achBtn = <Button key="ach" label={`成就 ${have.length}/${ACHS.length} ${open ? '▾' : '▸'}`} plain dimColor onPress={() => { update($, showAch, v => !v); update($, showSum, () => false) }} />
     const btnRow = (
-      <Box flexDirection="row" gap={2} flexWrap={e.surface === 'desktop' ? 'nowrap' : 'wrap'}>
+      <Box flexDirection="row" gap={2} flexWrap={e.surface === 'desktop' && !narrow ? 'nowrap' : 'wrap'}>
         <Button key="pat" label="摸摸头" plain dimColor onPress={() => react($, 'pat')} />
         <Button key="poke" label="戳一下" plain dimColor onPress={() => react($, 'poke')} />
         {be > 0
@@ -1170,8 +1175,8 @@ export const register: Register = on => {
         {be > 0 ? <Button key="brk" label={`结束休息 · 剩 ${breakLeft} 分`} plain dimColor onPress={() => endBreak($)} /> : null}
         {due ? <Button key="rest" label="知道啦" plain onPress={() => dismissRemind($)} /> : null}
         {warn && !due ? <Button key="warnok" label="知道啦" plain onPress={() => dismissWarn($)} /> : null}
-        {e.surface === 'desktop' ? null : sumBtn}
-        {e.surface === 'desktop' ? null : achBtn}
+        {e.surface === 'desktop' && !narrow ? null : sumBtn}
+        {e.surface === 'desktop' && !narrow ? null : achBtn}
         <Button key="hide" label="隐藏" plain dimColor onPress={() => update($, isHidden, () => true)} />
       </Box>
     )
@@ -1231,7 +1236,7 @@ export const register: Register = on => {
             </Box>
             {btnRow}
           </Box>
-          {e.props.bodyColumns < NARROW_COLS ? null : <Box flexDirection="row" gap={3} marginLeft={1} flexShrink={0}>
+          {narrow ? null : <Box flexDirection="row" gap={3} marginLeft={1} flexShrink={0}>
             <Box flexDirection="column" gap={0} flexShrink={0}>
               <Text dimColor wrap="truncate">{`5H 重置 ${untilText(r5, now)}`}</Text>
               <Text dimColor wrap="truncate">{`7D 重置 ${untilText(r7, now)}`}</Text>

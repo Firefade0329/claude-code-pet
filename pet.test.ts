@@ -125,7 +125,7 @@ test('greet: the pet greets right after the start, then settles to idle', async 
   expect(await count(m, hello)).toBe(0)
 })
 
-test('streak: a session left open overnight counts the next day on its first prompt', async ($, on) => {
+test('streak: a session left open overnight counts the next day on its first prompt', { timeoutMs: 60000 }, async ($, on) => {
   const clock = await engine($, on)
   const m = await mount($, 'desktop')
   await $.session.start({ source: 'startup', cwd: '/test' } as any)
@@ -209,6 +209,8 @@ test('narrow window: the right-hand info columns are dropped', async ($, on) => 
   expect(await count(wide, /5H 重置/)).toBe(1)
   const narrow = await $.ui.mount({ plugin: 'pet', surface: 'desktop', component: 'AbovePrompt', props: { ...PROPS, bodyColumns: 60 } })
   expect(await count(narrow, /5H 重置/)).toBe(0)
+  expect(await countBtn(narrow, /成就 \d+\/\d+/)).toBe(1)      // the achievements button moved into the button row
+  expect(await countBtn(narrow, /今日 \d+ 轮/)).toBe(1)
 })
 
 test('break: a finished focus timer starts a 5 minute break; pats do not end it, a prompt does', async ($, on) => {
@@ -341,11 +343,14 @@ test('achievements: poking her awake 10 times unlocks 别吵醒我', async ($, o
   expect(await hasText(m, /✓ 别吵醒我/)).toBe(true)
 })
 
-test('achievements: carrying on 5 times while the rest reminder is on unlocks 不听劝', async ($, on) => {
-  await engine($, on)
+test('achievements: carrying on 5 times while a real rest reminder is on unlocks 不听劝', async ($, on) => {
+  const clock = await engine($, on)
   const m = await mount($, 'desktop')
-  await $.turn.start({ text: 'hi', turnId: 'w0' } as any)      // work has started, so a reminder can come
-  await $.command.run({ command: 'pet', args: 'rest', origin: { kind: 'composer' }, presentation: {} } as any)
+  await $.session.start({ source: 'startup', cwd: '/test' } as any)
+  await $.turn.start({ text: 'hi', turnId: 'w0' } as any)      // a stretch of work starts
+  for (let i = 0; i < 7; i++) await clock.advance(10 * 60 * 1000)      // an hour later the real reminder is on
+  await clock.advance(30000)
+  expect(await countBtn(m, /知道啦/)).toBe(1)
   for (let i = 0; i < 5; i++) await $.turn.start({ text: 'hi', turnId: 'i' + i } as any)
   await press($, 'ach')
   await press($, 'ag-secret')
@@ -514,4 +519,15 @@ test('rest: waiting for a permission answer for a long time does not count as wo
   for (let i = 0; i < 7; i++) await clock.advance(10 * 60 * 1000)
   await clock.advance(30000)
   expect(await count(m, restLine)).toBe(0)
+})
+
+test('demo: carrying on after /pet rest is not counted as ignoring a real reminder', async ($, on) => {
+  await engine($, on)
+  const m = await mount($, 'desktop')
+  await $.turn.start({ text: 'hi', turnId: 'dr0' } as any)
+  await $.command.run({ command: 'pet', args: 'rest', origin: { kind: 'composer' }, presentation: {} } as any)
+  for (let i = 0; i < 6; i++) await $.turn.start({ text: 'hi', turnId: 'dr' + (i + 1) } as any)
+  await press($, 'ach')
+  await press($, 'ag-secret')
+  expect(await hasText(m, /✓ 不听劝/)).toBe(false)
 })

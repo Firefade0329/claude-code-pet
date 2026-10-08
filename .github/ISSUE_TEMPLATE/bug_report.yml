@@ -1,0 +1,84 @@
+name: Bug 反馈 / Bug report
+description: 桌宠出了问题（姿势、提醒、好感度、按钮、测试等）
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈！请尽量填全，能省下很多来回。
+        **不要贴个人信息**：用户名、电脑名、本机路径、令牌、对话内容。贴之前请自己检查一遍。
+        代码层面的修改请注意：`hooks/register.tsx` 是构建产物，维护者会在本机改源码并重新构建，所以这里只需要把问题说清楚，不需要提交修改。
+  - type: input
+    id: claude-code-version
+    attributes:
+      label: Claude Code 版本
+      description: 在终端运行 `claude --version`，把输出贴在这里。
+      placeholder: 例如 2.1.286
+    validations:
+      required: true
+  - type: input
+    id: pet-version
+    attributes:
+      label: 桌宠版本
+      description: 在 Claude Code 输入框里输入 `/pet version`，把返回的文字贴在这里。
+      placeholder: 例如 桌宠 v0.3.2 · built 2026-10-08 05:52
+    validations:
+      required: true
+  - type: dropdown
+    id: surface
+    attributes:
+      label: 使用的界面
+      options:
+        - 桌面端 Code 标签页
+        - 终端
+        - 其他
+        - 不确定
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: 操作系统和版本
+      description: 例如 Windows 11 23H2（Windows 里按 Win+R 输入 `winver` 可以看到），macOS 14，Ubuntu 22.04。
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      description: 一步一步写，越具体越好。
+      placeholder: |
+        1. 打开……
+        2. 点……
+        3. 看到……
+    validations:
+      required: true
+  - type: textarea
+    id: expected-actual
+    attributes:
+      label: 期望的表现和实际的表现
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: 日志或报错片段
+      description: 相关的报错信息、`claude plugin validate .` 或 `claude plugin test .` 的输出等。没有就写"无"。**贴之前请去掉个人信息。**
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: extra
+    attributes:
+      label: 补充信息（可选）
+      description: 截图（只截桌宠区域，不要带个人信息）、你已经试过的办法等。
+  - type: checkboxes
+    id: confirm
+    attributes:
+      label: 确认
+      options:
+        - label: 我检查过，上面填的内容里没有个人信息（用户名、电脑名、本机路径、令牌、对话内容）。
+          required: true
+        - label: 我搜过已有的 Issue，没有找到相同的问题。
+          required: true
