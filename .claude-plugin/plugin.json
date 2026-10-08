@@ -1,6 +1,6 @@
 {
   "name": "pet",
-  "version": "0.3.4",
+  "version": "0.4.0",
   "description": "Maid mascot in the prompt band: reacts to Claude state, shows CTX/5H/7D usage, keeps an affection counter.",
   "types": "./types/index.d.ts",
   "author": {

@@ -46,6 +46,6 @@ declare module 'claude-code' {
 export type PetMode = 'idle' | 'work' | 'think' | 'wait' | 'done' | 'sleep' | 'worry' | 'greet' | 'compact'
 export type Sprite = PetMode | 'shy' | 'surprised' | 'proud' | 'heart' | 'long' | 'rest' | 'focus' | 'up0' | 'up1' | 'up2' | 'start' | 'giveup'
 export type ReactKind = 'none' | 'pat' | 'poke' | 'flash'
-export type Today = { d: string; turns: number; tools: number; pats: number; focus: number }
+export type Today = { d: string; turns: number; tools: number; pats: number; focus: number; rests: number; pts: number }
 export type Stats = { turns: number; tools: number; pats: number; focus: number; night: number; longest: number; pokes: number; compacts: number; breaks: number; errors: number; wakes: number; bursts: number; ignored: number; peak: number }
 export type Streak = { last: string; n: number; max: number }

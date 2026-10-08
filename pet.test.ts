@@ -159,7 +159,7 @@ test('shared store: points earned in another conversation are not overwritten', 
   await engine($, on, { affection: 100 })      // this conversation has not loaded it (its own value is still 0)
   const m = await mount($, 'desktop')
   await $.ui.press({ plugin: 'pet', key: 'pat' })
-  expect(await count(m, /Lv\.5/)).toBe(1)      // 100 + 1 = 101 points, not 0 + 1
+  expect(await count(m, /Lv\.4/)).toBe(1)      // 100 + 1 = 101 points (Lv.4 = 72..120 on the 0.4.0 curve), not 0 + 1
 })
 
 test('usage warning: shows once when 5H crosses 80%, can be dismissed, goes away by itself after 5 minutes', async ($, on) => {
@@ -189,9 +189,9 @@ test('usage warning: shows once when 5H crosses 80%, can be dismissed, goes away
 
 
 test('level up: crossing a level shows its line and pose', async ($, on) => {
-  await engine($, on, { affection: 7 })
+  await engine($, on, { affection: 9 })
   const m = await mount($, 'desktop')
-  await $.ui.press({ plugin: 'pet', key: 'pat' })      // 7 + 1 = 8 points = level 2
+  await $.ui.press({ plugin: 'pet', key: 'pat' })      // 9 + 1 = 10 points = level 2
   expect(await count(m, /提升到 Lv\.2/)).toBe(1)
 })
 
@@ -306,13 +306,13 @@ test('achievements: hidden ones are not revealed until unlocked', async ($, on) 
   expect(await hasText(m, /还有 4 个隐藏成就/)).toBe(true)
 })
 
-test('achievements: an unlock gives its affection reward once (first = +2)', async ($, on) => {
+test('achievements: an unlock gives its affection reward once (first = +3)', async ($, on) => {
   await engine($, on)
   const m = await mount($, 'desktop')
   await $.turn.complete({ reason: 'answer', answer: '', durationMs: 1000, isAborted: false, turnId: 'r1' } as any)
-  expect(await count(m, /Lv\.1 · 3\//)).toBe(1)      // a finished turn gives 1, the "first" achievement 2
+  expect(await count(m, /Lv\.1 · 4\//)).toBe(1)      // a finished turn gives 1, the "first" achievement round(2 * 1.3) = 3
   await $.turn.complete({ reason: 'answer', answer: '', durationMs: 1000, isAborted: false, turnId: 'r2' } as any)
-  expect(await count(m, /Lv\.1 · 4\//)).toBe(1)
+  expect(await count(m, /Lv\.1 · 5\//)).toBe(1)
 })
 
 test('achievements: 5 quick pokes unlock the hidden 戳戳戳, 50 pokes unlock 戳戳乐', async ($, on) => {
@@ -398,7 +398,7 @@ test('achievements: unlocking the last ordinary one unlocks 全部收集', async
   await engine($, on, {
     stats: { turns: 3000, tools: 5000, pats: 500, focus: 50, night: 1, longest: 31 * 60000, pokes: 50, compacts: 10, breaks: 10, errors: 10, peak: 1, wakes: 0, bursts: 0, ignored: 0 },
     streak: { last: '2000-1-1', n: 100, max: 100 },
-    affection: 1700,
+    affection: 1975,
     today: { d: dayKey(new Date(1_700_000_000_000)), turns: 50, tools: 0, pats: 0, focus: 0 },
     achieved: [],
   })
@@ -616,4 +616,110 @@ test('an achievement id that no longer exists is not counted in the shown total'
   await $.session.start({ source: 'startup', cwd: '/test' } as any)
   await $.turn.start({ text: 'hi', turnId: 'x1' } as any)
   expect(await countBtn(m, /成就 1\/38/)).toBe(1)
+})
+
+// ---------- affection model v2 (0.4.0) ----------
+const todayKey = () => dayKey(new Date(1_700_000_000_000))
+const heartOf = (m: any, re: RegExp) => count(m, re)
+
+test('points: the first 10 turns of a day are worth 1, the next ones 0.5 (12 turns = 11, plus the first achievement)', async ($, on) => {
+  await engine($, on)
+  const m = await mount($, 'desktop')
+  for (let i = 0; i < 12; i++) await $.turn.complete({ reason: 'answer', answer: '', durationMs: 1000, isAborted: false, turnId: 'p' + i } as any)
+  expect(await heartOf(m, /Lv\.2 · 14\/35/)).toBe(1)      // 10 + 0.5 + 0.5 = 11, "first" gives round(2 * 1.3) = 3
+})
+
+test('points: after the 80th turn of a day a turn is worth nothing', async ($, on) => {
+  await engine($, on, { today: { d: todayKey(), turns: 80, tools: 0, pats: 0, focus: 0, rests: 0, pts: 25 }, achieved: ['first', 'day50'], stats: { turns: 80 } })
+  const m = await mount($, 'desktop')
+  await $.turn.complete({ reason: 'answer', answer: '', durationMs: 1000, isAborted: false, turnId: 'cap1' } as any)
+  expect(await heartOf(m, /Lv\.1 · 0\/10/)).toBe(1)
+})
+
+test('points: a focus timer is worth 2 for the first four of a day, then nothing', async ($, on) => {
+  const clock = await engine($, on, { achieved: ['foc1'] })
+  const m = await mount($, 'desktop')
+  await press($, 'focus')
+  await clock.advance(26 * 60 * 1000)
+  expect(await heartOf(m, /Lv\.1 · 2\/10/)).toBe(1)
+})
+
+test('points: the fifth timer of a day pays nothing', async ($, on) => {
+  const clock = await engine($, on, { achieved: ['foc1'], today: { d: todayKey(), turns: 0, tools: 0, pats: 0, focus: 4, rests: 0, pts: 8 } })
+  const m = await mount($, 'desktop')
+  await press($, 'focus')
+  await clock.advance(26 * 60 * 1000)
+  expect(await heartOf(m, /Lv\.1 · 0\/10/)).toBe(1)
+})
+
+test('points: a full 5 minute rest is worth 1', async ($, on) => {
+  const clock = await engine($, on, { achieved: ['foc1', 'brk1'] })
+  const m = await mount($, 'desktop')
+  await press($, 'focus')
+  await clock.advance(26 * 60 * 1000)
+  await clock.advance(5 * 60 * 1000 + 2000)
+  expect(await heartOf(m, /Lv\.1 · 3\/10/)).toBe(1)      // 2 for the timer + 1 for the rest
+})
+
+test('streak: a weekend off does not break it (Friday -> Monday), a longer gap does', async ($, on) => {
+  const friday = new Date(2023, 10, 17)
+  const monday = new Date(2023, 10, 20, 12, 0, 0).getTime()
+  const clock = await engine($, on, { streak: { last: dayKey(friday), n: 4, max: 4 }, achieved: ['str3'] })
+  const m = await mount($, 'desktop')
+  await clock.set(monday)
+  await $.turn.start({ text: 'hi', turnId: 'wk1' } as any)
+  expect(await heartOf(m, /Lv\.1 · 7\/10/)).toBe(1)      // day 5: 3 + 4
+})
+
+test('streak: Thursday -> Monday is a real gap and starts again at 3', async ($, on) => {
+  const thursday = new Date(2023, 10, 16)
+  const monday = new Date(2023, 10, 20, 12, 0, 0).getTime()
+  const clock = await engine($, on, { streak: { last: dayKey(thursday), n: 4, max: 4 }, achieved: ['str3'] })
+  const m = await mount($, 'desktop')
+  await clock.set(monday)
+  await $.turn.start({ text: 'hi', turnId: 'wk2' } as any)
+  expect(await heartOf(m, /Lv\.1 · 3\/10/)).toBe(1)
+})
+
+test('migration: an old save keeps its level (old Lv.6 at 153 points becomes the new Lv.6 at 180), once', async ($, on) => {
+  const clock = await engine($, on, { affection: 153, streak: { last: todayKey(), n: 1, max: 1 } })
+  const m = await mount($, 'desktop')
+  await $.session.start({ source: 'startup', cwd: '/test' } as any)
+  await clock.advance(1000)
+  expect(await heartOf(m, /Lv\.6 · 180\/250/)).toBe(1)
+})
+
+test('migration: a high old level is kept too (old Lv.10 at 418 becomes 517), and a migrated save is left alone', async ($, on) => {
+  const clock = await engine($, on, { affection: 418, streak: { last: todayKey(), n: 1, max: 1 } })
+  const m = await mount($, 'desktop')
+  await $.session.start({ source: 'startup', cwd: '/test' } as any)
+  await clock.advance(1000)
+  expect(await heartOf(m, /Lv\.10 · 517\/625/)).toBe(1)
+})
+
+test('migration: a save already on the new model is not touched', async ($, on) => {
+  const clock = await engine($, on, { affection: 153, model: 2, streak: { last: todayKey(), n: 1, max: 1 } })
+  const m = await mount($, 'desktop')
+  await $.session.start({ source: 'startup', cwd: '/test' } as any)
+  await clock.advance(1000)
+  expect(await heartOf(m, /Lv\.5 · 153\/180/)).toBe(1)
+})
+
+test('summary: shows today\'s points', async ($, on) => {
+  await engine($, on)
+  const m = await mount($, 'desktop')
+  await $.turn.complete({ reason: 'answer', answer: '', durationMs: 1000, isAborted: false, turnId: 'sm1' } as any)
+  await press($, 'sum')
+  expect(await heartOf(m, /今日心意 \+4/)).toBe(1)      // 1 for the turn + 3 for "first"
+})
+
+test('achievement rewards are scaled: the total is about a seventh of what Lv.20 needs', async ($, on) => {
+  await engine($, on, { achieved: [] })
+  await mount($, 'desktop')
+  // the same arithmetic as the code: Math.round(rw * 1.3) over the 38 base rewards
+  const base = [2, 3, 5, 8, 12, 5, 4, 8, 3, 5, 6, 10, 20, 3, 4, 5, 6, 0, 3, 6, 10, 3, 2, 5, 10, 2, 6, 3, 4, 8, 2, 6, 5, 4, 5, 5, 5, 10]
+  const total = base.reduce((n, r) => n + Math.round(r * 1.3), 0)
+  expect(base.length).toBe(38)
+  expect(total).toBeGreaterThan(250)
+  expect(total / 1975).toBeLessThan(0.16)
 })

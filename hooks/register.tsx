@@ -49,7 +49,7 @@ const cacheRead = atom({ plugin: 'pet', key: 'cacheRead' } as const, 0)       //
 const cacheAll = atom({ plugin: 'pet', key: 'cacheAll' } as const, 0)
 const cacheOld = atom({ plugin: 'pet', key: 'cacheOld' } as const, false)     // cacheHit restored from the last run
 const cost = atom({ plugin: 'pet', key: 'cost' } as const, null as number | null)
-const today = atom({ plugin: 'pet', key: 'today' } as const, { d: '', turns: 0, tools: 0, pats: 0, focus: 0 } as Today)
+const today = atom({ plugin: 'pet', key: 'today' } as const, { d: '', turns: 0, tools: 0, pats: 0, focus: 0, rests: 0, pts: 0 } as Today)
 const stats = atom({ plugin: 'pet', key: 'stats' } as const, { turns: 0, tools: 0, pats: 0, focus: 0, night: 0, longest: 0, pokes: 0, compacts: 0, breaks: 0, errors: 0, wakes: 0, bursts: 0, ignored: 0, peak: 0 } as Stats)
 const streak = atom({ plugin: 'pet', key: 'streak' } as const, { last: '', n: 0, max: 0 } as Streak)
 const achieved = atom({ plugin: 'pet', key: 'achieved' } as const, [] as string[])
@@ -91,7 +91,7 @@ const LONG_TOAST_MS = 10000            // how long the long-task, rest-reminder 
 const REST_AFTER_MS = 60 * 60 * 1000      // "you have been working for an hour"
 const WORK_GAP_MS = 15 * 60 * 1000        // a break this long starts a new stretch of work
 const FOCUS_MS = 25 * 60 * 1000
-const BUILD_INFO = 'v0.3.4 · built 2026-10-08 06:37'      // filled in by build.py: tells which build a conversation has loaded (/pet version)
+const BUILD_INFO = 'v0.4.0 · built 2026-10-08 07:17'      // filled in by build.py: tells which build a conversation has loaded (/pet version)
 let demoRemind = false      // true while the reminder on screen comes from the /pet rest demo (continuing is not counted)
 let demoBreakEnd = 0      // end time of a break started by the /pet break demo
 let lastLimits = ''      // what was last written to the store as 'limits' / 'cacheHit' by this conversation (no write when nothing changed)
@@ -101,8 +101,19 @@ const LATE_FOCUS_MS = 5 * 60 * 1000      // a focus timer found finished this lo
 
 // ---- affection levels: 1..20, every level takes more points than the one before ----
 const MAX_LEVEL = 20
-const THRESH: number[] = [0]
-for (let L = 2; L <= MAX_LEVEL; L++) THRESH.push(Math.round(8 * Math.pow(L - 1, 1.8)))
+// Points needed for Lv.1..20. Lv.7 (friends) = 250 and Lv.14 (family) = 1000 are the two anchors; the curve is 10.06 * (L-1)^1.79.
+// How many points the n-th finished turn OF THE DAY is worth: the first 10 are worth 1, the next 20 are worth 0.5, then 0.1 up to the
+// 80th (25 points at most a day), none after that. Timers: 2 points for the first 4 a day. Full rests: 1 point for the first 4 a day.
+const turnPoints = (n: number) => (n <= 10 ? 1 : n <= 30 ? 0.5 : n <= 80 ? 0.1 : 0)
+const FOCUS_PAID_PER_DAY = 4
+const REST_PAID_PER_DAY = 4
+const REWARD_SCALE = 1.3      // achievement rewards, scaled to this pace so that they stay about a seventh of what a full level-up needs
+const emptyToday = (d: string = ''): Today => ({ d, turns: 0, tools: 0, pats: 0, focus: 0, rests: 0, pts: 0 })
+const normToday = (x: any, d: string): Today => ({ d, turns: num(x?.turns), tools: num(x?.tools), pats: num(x?.pats), focus: num(x?.focus), rests: num(x?.rests), pts: num(x?.pts) })
+const THRESH: number[] = [0, 10, 35, 72, 121, 180, 250, 330, 419, 517, 625, 741, 866, 1000, 1142, 1292, 1451, 1618, 1792, 1975]
+// the thresholds of the versions before 0.4.0: only used to lift old saves to the same level (see migrateModelLocked)
+const OLD_THRESH: number[] = [0]
+for (let L = 2; L <= MAX_LEVEL; L++) OLD_THRESH.push(Math.round(8 * Math.pow(L - 1, 1.8)))
 const levelOf = (n: number) => {
   let l = 1
   for (let i = 1; i < THRESH.length; i++) if (n >= THRESH[i]) l = i + 1
@@ -328,7 +339,7 @@ const GROUPS = [
   { id: 'misc', name: '其他' },
   { id: 'secret', name: '隐藏' },
 ]
-const A = (id: string, g: string, name: string, desc: string, rw: number, goal: number, cur: (c: Ctx) => number, hid?: boolean): Ach => ({ id, g, name, desc, rw, goal, cur, hid })
+const A = (id: string, g: string, name: string, desc: string, rw: number, goal: number, cur: (c: Ctx) => number, hid?: boolean): Ach => ({ id, g, name, desc, rw: Math.round(rw * REWARD_SCALE), goal, cur, hid })
 const ACHS: Ach[] = [
   A('first', 'chat', '初次见面', '完成第一轮对话', 2, 1, c => c.s.turns),
   A('t100', 'chat', '小有成就', '累计完成 100 轮', 3, 100, c => c.s.turns),
@@ -494,7 +505,7 @@ async function checkAchLocked($: any) {
   const now = await $.clock.now()
   const tIn = (await $.store.get('today')) as Today | undefined
   const t = tIn && tIn.d === dayOf(now) ? tIn : await read($, today)
-  const td: Today = t.d === dayOf(now) ? { d: t.d, turns: t.turns ?? 0, tools: t.tools ?? 0, pats: t.pats ?? 0, focus: t.focus ?? 0 } : { d: '', turns: 0, tools: 0, pats: 0, focus: 0 }
+  const td: Today = t.d === dayOf(now) ? normToday(t, t.d) : emptyToday()
   const stored = (await $.store.get('achieved')) as string[] | undefined
   const mine = await read($, achieved)
   const known = Array.from(new Set(mine.concat(Array.isArray(stored) ? stored : [])))
@@ -535,9 +546,10 @@ async function checkAch($: any) {
 async function addAffectionLocked($: any, n: number): Promise<number[]> {
   const stored = num(await $.store.get('affection'))
   const before = Math.max(stored, num(await read($, affection)))      // another conversation may have added points meanwhile
-  const after = before + n
+  const after = Math.round((before + n) * 10) / 10      // points can be fractions (a late turn of the day is worth 0.5 or 0.1)
   await update($, affection, () => after)
   await $.store.set('affection', after)
+  await bumpTodayLocked($, 0, 0, 0, 0, 0, n)      // today's points, for the daily summary
   return [before, after]
 }
 
@@ -554,18 +566,20 @@ async function addAffection($: any, n: number, check: boolean = true) {
 }
 
 // today's counters (reset by themselves when the date changes), kept between runs
-async function bumpTodayLocked($: any, turns: number, tools: number, pats: number, focus: number) {
+async function bumpTodayLocked($: any, turns: number, tools: number, pats: number, focus: number, rests: number = 0, pts: number = 0): Promise<Today> {
   const now = await $.clock.now()
+  const day = dayOf(now)
   const st = (await $.store.get('today')) as Today | undefined
-  let t = st && st.d === dayOf(now) ? { d: st.d, turns: st.turns ?? 0, tools: st.tools ?? 0, pats: st.pats ?? 0, focus: st.focus ?? 0 } : await read($, today)
-  if (t.d !== dayOf(now)) t = { d: dayOf(now), turns: 0, tools: 0, pats: 0, focus: 0 }
-  t = { d: t.d, turns: t.turns + turns, tools: t.tools + tools, pats: t.pats + pats, focus: t.focus + focus }
+  let t: Today = st && st.d === day ? normToday(st, st.d) : normToday(await read($, today), (await read($, today)).d)
+  if (t.d !== day) t = emptyToday(day)
+  t = { d: t.d, turns: t.turns + turns, tools: t.tools + tools, pats: t.pats + pats, focus: t.focus + focus, rests: t.rests + rests, pts: Math.round((t.pts + pts) * 10) / 10 }
   await update($, today, () => t)
   await $.store.set('today', t)
+  return t
 }
 
-async function bumpToday($: any, turns: number, tools: number, pats: number, focus: number) {
-  await locked(() => bumpTodayLocked($, turns, tools, pats, focus))
+async function bumpToday($: any, turns: number, tools: number, pats: number, focus: number, rests: number = 0): Promise<Today> {
+  return locked(() => bumpTodayLocked($, turns, tools, pats, focus, rests))
 }
 
 // lifetime counters: adds up (turns, tools, ...), or keeps the largest value (longest, peak)
@@ -718,9 +732,10 @@ async function finishFocus($: any, endedAt: number) {
   const lvl = levelOf(await read($, affection))
   await update($, focusEnd, () => 0)
   if ((await $.clock.now()) - endedAt > LATE_FOCUS_MS) return      // the computer slept through it: no tomato for time that was not spent
-  await bumpToday($, 0, 0, 0, 1)
+  const day = await bumpToday($, 0, 0, 0, 1)
   await bumpStats($, { focus: 1 }, false)
-  await addAffection($, 2)
+  if (day.focus <= FOCUS_PAID_PER_DAY) await addAffection($, 2)
+  else await checkAch($)
   $.ui.toast(say('focusDone', lvl, endedAt / 1000))
   await setMode($, 'done')
   await settleLater($, 'done')
@@ -749,7 +764,12 @@ async function finishBreak($: any, end: number) {
   await update($, breakEnd, () => 0)
   if ((await $.clock.now()) - end > LATE_FOCUS_MS) return      // the computer slept through it: no rest to count
   await update($, workStart, () => 0)      // a real rest: the hour of steady work starts over
-  if (end !== demoBreakEnd) await bumpStats($, { breaks: 1 })      // (the /pet break demo is not counted)
+  if (end !== demoBreakEnd) {      // (the /pet break demo is not counted)
+    const day = await bumpToday($, 0, 0, 0, 0, 1)
+    await bumpStats($, { breaks: 1 }, false)
+    if (day.rests <= REST_PAID_PER_DAY) await addAffection($, 1)
+    else await checkAch($)
+  }
   const line = say('breakDone', lvl, end / 1000)
   $.ui.toast(line, { timeoutMs: LONG_TOAST_MS })
   await flash($, line, 'greet', 8000)
@@ -758,11 +778,14 @@ async function finishBreak($: any, end: number) {
 // Counts the first use of a calendar day (a new session, or the first prompt of a session that stays open for days):
 // time-of-day greeting, streak, a little affection. Returns the greeting, or null when today is already counted.
 // the calendar day before `ms` (not "24 hours earlier": a day with a clock change is 23 or 25 hours long)
-const dayBefore = (ms: number) => {
+const daysBack = (ms: number, n: number) => {
   const d = new Date(ms)
-  d.setDate(d.getDate() - 1)
+  d.setDate(d.getDate() - n)
   return dayOf(d.getTime())
 }
+const dayBefore = (ms: number) => daysBack(ms, 1)
+// A weekend off does not break the streak: on a Monday, a last use on the Friday before still counts as the day before.
+const continuesStreak = (last: string, now: number) => last === dayBefore(now) || (new Date(now).getDay() === 1 && last === daysBack(now, 3))
 
 // `settleMs`: several conversations that start together (the app restarts with a few open) must not all count the same day:
 // each writes a claim, waits that long, and only the one whose claim is still there goes on.
@@ -774,7 +797,7 @@ async function claimDayLocked($: any, now: number): Promise<Streak | null> {
     await update($, streak, () => k)
     return null
   }
-  const n = k.last === dayBefore(now) ? k.n + 1 : 1
+  const n = continuesStreak(k.last, now) ? k.n + 1 : 1
   const nk: Streak = { last: day, n, max: Math.max(k.max, n) }
   await update($, streak, () => nk)
   await $.store.set('streak', nk)
@@ -813,8 +836,20 @@ async function dailyCheck($: any, now: number, settleMs: number = 0): Promise<st
 
 // Restore what was saved and do the daily greeting. Runs in the background right after the session starts:
 // session.start itself is awaited before the first prompt, so nothing slow may sit in it.
+// Saves from before 0.4.0 used the old thresholds. Once (marked by `model: 2` in the store) the points are lifted to the threshold of the
+// level the person had, so nobody drops a level because the thresholds changed.
+async function migrateModelLocked($: any) {
+  if (num(await $.store.get('model')) >= 2) return
+  const old = num(await $.store.get('affection'))
+  let oldLevel = 1
+  for (let i = 1; i < OLD_THRESH.length; i++) if (old >= OLD_THRESH[i]) oldLevel = i + 1
+  await $.store.set('affection', Math.max(old, THRESH[oldLevel - 1]))
+  await $.store.set('model', 2)
+}
+
 async function restoreSaved($: any) {
   try {
+    await locked(() => migrateModelLocked($))
     const a = num(await $.store.get('affection'))
     await update($, affection, () => a)
     const have = (await $.store.get('achieved')) as string[] | undefined
@@ -841,7 +876,7 @@ async function restoreSaved($: any) {
       await update($, cacheOld, () => true)
     }
     const td = (await $.store.get('today')) as Today | undefined
-    if (td && td.d === dayOf(now0)) await update($, today, () => ({ d: td.d, turns: td.turns ?? 0, tools: td.tools ?? 0, pats: td.pats ?? 0, focus: td.focus ?? 0 }))
+    if (td && td.d === dayOf(now0)) await update($, today, () => normToday(td, td.d))
 
     // first use of a day: time-of-day greeting, streak, a little affection; otherwise a short "welcome back"
     const daily = await dailyCheck($, now0, 150)
@@ -1057,10 +1092,12 @@ export const register: Register = on => {
       }
       if (e.reason === 'answer') {
         const lvl = levelOf(await read($, affection))
-        await bumpToday($, 1, tools, 0, 0)
+        const day = await bumpToday($, 1, tools, 0, 0)
         const hour = new Date(now).getHours()
         await bumpStats($, { turns: 1, tools, night: hour < 5 ? 1 : 0, longest: e.durationMs }, false)
-        await addAffection($, 1)
+        const pay = turnPoints(day.turns)
+        if (pay > 0) await addAffection($, pay)
+        else await checkAch($)
         await setMode($, 'done')
         await settleLater($, 'done')
         if (e.durationMs >= LONG_TURN_MS) {
@@ -1206,8 +1243,8 @@ export const register: Register = on => {
     const focusLeft = fe > 0 ? Math.max(1, Math.ceil((fe - now) / 60000)) : 0
     const nextAt = lvl >= MAX_LEVEL ? 0 : THRESH[lvl]
 
-    const heartText = lvl >= MAX_LEVEL ? `♥ Lv.${lvl} MAX` : `♥ Lv.${lvl} · ${aff}/${nextAt}`
-    const gone = sameDay ? td : { d: '', turns: 0, tools: 0, pats: 0, focus: 0 }
+    const heartText = lvl >= MAX_LEVEL ? `♥ Lv.${lvl} MAX` : `♥ Lv.${lvl} · ${Math.floor(aff)}/${nextAt}`
+    const gone = sameDay ? td : emptyToday()
     const achCtx: Ctx = { s: normStats(stt), k: sk, lvl, today: gone, have }
 
     const narrow = e.props.bodyColumns < NARROW_COLS      // the right-hand columns do not fit: their two buttons go into the button row
@@ -1237,6 +1274,7 @@ export const register: Register = on => {
         <Text dimColor>{`· 对话 ${gone.turns} 轮，调用工具 ${gone.tools} 次`}</Text>
         <Text dimColor>{`· 番茄钟 ${gone.focus} 个（专注 ${gone.focus * 25} 分钟）　摸摸头 ${gone.pats} 次`}</Text>
         <Text dimColor>{`· 连续使用 ${sk.n} 天（最长 ${sk.max} 天）　好感度 Lv.${lvl}`}</Text>
+        <Text dimColor>{`· 今日心意 +${Math.round(gone.pts * 10) / 10}（对话最多 25，摸头 5，番茄钟 4 个，完整休息 4 次，签到另算）`}</Text>
         <Text dimColor>{`· 累计 ${stt.turns} 轮 · ${stt.tools} 工具 · ${stt.focus} 番茄 · 最长一次任务 ${Math.round(stt.longest / 60000)} 分钟`}</Text>
       </Box>
     ) : null
