@@ -492,3 +492,26 @@ test('demo: /pet version tells which build is loaded', async ($, on) => {
   const r: any = await $.command.run({ command: 'pet', args: 'version', origin: { kind: 'composer' }, presentation: {} } as any)
   expect(JSON.stringify(r)).toMatch(/桌宠 v\d+\.\d+\.\d+ · built \d{4}-\d{2}-\d{2} \d{2}:\d{2}/)
 })
+
+test('rest: one very long turn (70 minutes) still counts as continuous work, so the one-hour reminder comes', async ($, on) => {
+  const clock = await engine($, on)
+  const m = await mount($, 'desktop')
+  await $.session.start({ source: 'startup', cwd: '/test' } as any)
+  const restLine = /连续工作一小时|休息一下对身体好|已工作一小时/
+  await $.turn.start({ text: 'big task', turnId: 'long1' } as any)
+  for (let i = 0; i < 7; i++) await clock.advance(10 * 60 * 1000)      // no tool calls, no turn.complete: just one long turn
+  await clock.advance(30000)
+  expect(await count(m, restLine)).toBe(1)
+})
+
+test('rest: waiting for a permission answer for a long time does not count as work', async ($, on) => {
+  const clock = await engine($, on)
+  const m = await mount($, 'desktop')
+  await $.session.start({ source: 'startup', cwd: '/test' } as any)
+  const restLine = /连续工作一小时|休息一下对身体好|已工作一小时/
+  await $.turn.start({ text: 'task', turnId: 'w1' } as any)
+  await $.classic.PermissionRequest({ tool_name: 'Bash', tool_input: { command: 'ls' } } as any)
+  for (let i = 0; i < 7; i++) await clock.advance(10 * 60 * 1000)
+  await clock.advance(30000)
+  expect(await count(m, restLine)).toBe(0)
+})
