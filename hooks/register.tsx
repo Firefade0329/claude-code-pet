@@ -85,6 +85,12 @@ const LONG_TURN_MS = 2 * 60 * 1000
 // 'today' button was 21 characters then, and every character more takes about one more cell (see `narrow` in the render).
 const NARROW_COLS = 97
 const SUM_LABEL_BASE = 21
+// The button row of the normal state (摸摸头 戳一下 专注 25 分钟 隐藏) costs 40 cells, a button's text in cells (a Chinese character is two) plus
+// about 3 for its padding and gap. A longer row (a timer running, the compact button, a reminder) widens the left half, and the right-hand
+// block must then go earlier, or its last column is cut off.
+const ROW_BASE_COST = 40
+const cells = (t: string) => Array.from(t).reduce((n, ch) => n + ((ch.codePointAt(0) as number) >= 0x2e80 ? 2 : 1), 0)
+const rowCost = (labels: string[]) => labels.reduce((n, t) => n + cells(t) + 3, 0)
 const COMPACT_BTN_AT = 80      // the "compact" button appears from this context fill (%)
 const WARN_MS = 5 * 60 * 1000                 // a usage warning goes away by itself after this long
 const WARN_5H = 80
@@ -95,7 +101,7 @@ const LONG_TOAST_MS = 10000            // how long the long-task, rest-reminder 
 const REST_AFTER_MS = 60 * 60 * 1000      // "you have been working for an hour"
 const WORK_GAP_MS = 15 * 60 * 1000        // a break this long starts a new stretch of work
 const FOCUS_MS = 25 * 60 * 1000
-const BUILD_INFO = 'v0.4.1 · built 2026-10-22 20:40'      // filled in by build.py: tells which build a conversation has loaded (/pet version)
+const BUILD_INFO = 'v0.4.2 · built 2026-10-22 20:50'      // filled in by build.py: tells which build a conversation has loaded (/pet version)
 let demoRemind = false      // true while the reminder on screen comes from the /pet rest demo (continuing is not counted)
 let demoBreakEnd = 0      // end time of a break started by the /pet break demo
 let lastLimits = ''      // what was last written to the store as 'limits' / 'cacheHit' by this conversation (no write when nothing changed)
@@ -1252,20 +1258,24 @@ export const register: Register = on => {
     const achCtx: Ctx = { s: normStats(stt), k: sk, lvl, today: gone, have }
 
     const sumLabel = `今日 ${gone.turns} 轮·${gone.tools} 工具·${gone.focus} 番茄 ${sum ? '▾' : '▸'}`
-    const narrow = e.props.bodyColumns < NARROW_COLS + Math.max(0, sumLabel.length - SUM_LABEL_BASE)      // the right-hand columns do not fit: their two buttons go into the button row
+    const rowLabels = ['摸摸头', '戳一下'].concat(
+      be > 0 ? [] : fe > 0 ? [`放弃 · 剩${focusLeft}分`] : ['专注 25 分钟'],
+      c !== null && c >= COMPACT_BTN_AT && m !== 'compact' ? ['压缩上下文'] : [],
+      be > 0 ? [`结束休息 · 剩${breakLeft}分`] : [], due ? ['知道啦'] : [], warn && !due ? ['知道啦'] : [], ['隐藏'])
+    const narrow = e.props.bodyColumns < NARROW_COLS + Math.max(0, sumLabel.length - SUM_LABEL_BASE) + Math.max(0, rowCost(rowLabels) - ROW_BASE_COST)      // the right-hand columns do not fit: their two buttons go into the button row
     const sumBtn = <Button key="sum" label={sumLabel} plain dimColor onPress={() => { update($, showSum, v => !v); update($, showAch, () => false) }} />
     const achBtn = <Button key="ach" label={`成就 ${have.filter(id => ACHS.some(a => a.id === id)).length}/${ACHS.length} ${open ? '▾' : '▸'}`} plain dimColor onPress={() => { update($, showAch, v => !v); update($, showSum, () => false) }} />
     const btnRow = (
-      <Box flexDirection="row" gap={e.surface === 'desktop' ? 1 : 2} flexWrap={e.surface === 'desktop' && !narrow ? 'nowrap' : 'wrap'}>
+      <Box flexDirection="row" columnGap={e.surface === 'desktop' ? 1 : 2} rowGap={0} flexWrap={e.surface === 'desktop' && !narrow ? 'nowrap' : 'wrap'}>
         <Button key="pat" label="摸摸头" plain dimColor onPress={() => react($, 'pat')} />
         <Button key="poke" label="戳一下" plain dimColor onPress={() => react($, 'poke')} />
         {be > 0
           ? null      // during the break the row shows "结束休息" instead (keeps the row as short as while a timer runs)
           : fe > 0
-            ? <Button key="focus" label={`放弃专注 · 剩 ${focusLeft} 分`} plain dimColor onPress={() => cancelFocus($)} />
+            ? <Button key="focus" label={`放弃 · 剩${focusLeft}分`} plain dimColor onPress={() => cancelFocus($)} />
             : <Button key="focus" label="专注 25 分钟" plain dimColor onPress={() => startFocus($)} />}
         {c !== null && c >= COMPACT_BTN_AT && m !== 'compact' ? <Button key="compact" label="压缩上下文" plain dimColor onPress={() => fillCompact($)} /> : null}
-        {be > 0 ? <Button key="brk" label={`结束休息 · 剩 ${breakLeft} 分`} plain dimColor onPress={() => endBreak($)} /> : null}
+        {be > 0 ? <Button key="brk" label={`结束休息 · 剩${breakLeft}分`} plain dimColor onPress={() => endBreak($)} /> : null}
         {due ? <Button key="rest" label="知道啦" plain onPress={() => dismissRemind($)} /> : null}
         {warn && !due ? <Button key="warnok" label="知道啦" plain onPress={() => dismissWarn($)} /> : null}
         {e.surface === 'desktop' && !narrow ? null : sumBtn}
@@ -1285,7 +1295,7 @@ export const register: Register = on => {
     ) : null
     const achPanel = open ? (
       <Box flexDirection="column" paddingX={2}>
-        <Box flexDirection="row" flexWrap="wrap" gap={2}>
+        <Box flexDirection="row" flexWrap="wrap" columnGap={1} rowGap={0}>
           {GROUPS.map(g => {
             const all = ACHS.filter(a => a.g === g.id)
             const got = all.filter(a => have.includes(a.id)).length
