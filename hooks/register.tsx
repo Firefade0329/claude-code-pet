@@ -80,7 +80,11 @@ const REACT_FOR_MS = 2800
 const FLASH_FOR_MS = 4500
 const PATS_PER_DAY = 5      // head pats that still add affection per day
 const LONG_TURN_MS = 2 * 60 * 1000
-const NARROW_COLS = 90      // below this many cells the two info columns on the right are dropped (a guess: they need about 300px)
+// Below this many cells the info columns on the right do not fit beside the picture and the buttons, and move into the button row.
+// Measured on the author's screen (Claude desktop 2.1.308): the full layout fits at 99 cells with about 3 to spare; the label of the
+// 'today' button was 21 characters then, and every character more takes about one more cell (see `narrow` in the render).
+const NARROW_COLS = 97
+const SUM_LABEL_BASE = 21
 const COMPACT_BTN_AT = 80      // the "compact" button appears from this context fill (%)
 const WARN_MS = 5 * 60 * 1000                 // a usage warning goes away by itself after this long
 const WARN_5H = 80
@@ -91,7 +95,7 @@ const LONG_TOAST_MS = 10000            // how long the long-task, rest-reminder 
 const REST_AFTER_MS = 60 * 60 * 1000      // "you have been working for an hour"
 const WORK_GAP_MS = 15 * 60 * 1000        // a break this long starts a new stretch of work
 const FOCUS_MS = 25 * 60 * 1000
-const BUILD_INFO = 'v0.4.0 · built 2026-10-08 07:17'      // filled in by build.py: tells which build a conversation has loaded (/pet version)
+const BUILD_INFO = 'v0.4.1 · built 2026-10-22 20:40'      // filled in by build.py: tells which build a conversation has loaded (/pet version)
 let demoRemind = false      // true while the reminder on screen comes from the /pet rest demo (continuing is not counted)
 let demoBreakEnd = 0      // end time of a break started by the /pet break demo
 let lastLimits = ''      // what was last written to the store as 'limits' / 'cacheHit' by this conversation (no write when nothing changed)
@@ -1247,11 +1251,12 @@ export const register: Register = on => {
     const gone = sameDay ? td : emptyToday()
     const achCtx: Ctx = { s: normStats(stt), k: sk, lvl, today: gone, have }
 
-    const narrow = e.props.bodyColumns < NARROW_COLS      // the right-hand columns do not fit: their two buttons go into the button row
-    const sumBtn = <Button key="sum" label={`今日 ${gone.turns} 轮 · ${gone.tools} 工具 · ${gone.focus} 番茄 ${sum ? '▾' : '▸'}`} plain dimColor onPress={() => { update($, showSum, v => !v); update($, showAch, () => false) }} />
+    const sumLabel = `今日 ${gone.turns} 轮·${gone.tools} 工具·${gone.focus} 番茄 ${sum ? '▾' : '▸'}`
+    const narrow = e.props.bodyColumns < NARROW_COLS + Math.max(0, sumLabel.length - SUM_LABEL_BASE)      // the right-hand columns do not fit: their two buttons go into the button row
+    const sumBtn = <Button key="sum" label={sumLabel} plain dimColor onPress={() => { update($, showSum, v => !v); update($, showAch, () => false) }} />
     const achBtn = <Button key="ach" label={`成就 ${have.filter(id => ACHS.some(a => a.id === id)).length}/${ACHS.length} ${open ? '▾' : '▸'}`} plain dimColor onPress={() => { update($, showAch, v => !v); update($, showSum, () => false) }} />
     const btnRow = (
-      <Box flexDirection="row" gap={2} flexWrap={e.surface === 'desktop' && !narrow ? 'nowrap' : 'wrap'}>
+      <Box flexDirection="row" gap={e.surface === 'desktop' ? 1 : 2} flexWrap={e.surface === 'desktop' && !narrow ? 'nowrap' : 'wrap'}>
         <Button key="pat" label="摸摸头" plain dimColor onPress={() => react($, 'pat')} />
         <Button key="poke" label="戳一下" plain dimColor onPress={() => react($, 'poke')} />
         {be > 0
@@ -1321,15 +1326,16 @@ export const register: Register = on => {
             <Svg source={barsSvg(c, f5, f7, faded)} alt="usage bars" width={262} height={64} />
             <Box flexDirection="row" gap={2}>
               <Text wrap="truncate">{line}</Text>
-              <Box flexShrink={0}><Text dimColor wrap="truncate">{heartText}</Text></Box>
+              {narrow ? <Box flexShrink={0}><Text dimColor wrap="truncate">{heartText}</Text></Box> : null}      {/* wide: the hearts sit in the right-hand block, so a long line does not push it out */}
             </Box>
             {btnRow}
           </Box>
-          {narrow ? null : <Box flexDirection="row" gap={3} marginLeft={1} flexShrink={0}>
+          {narrow ? null : <Box flexDirection="row" gap={1} marginLeft={1} flexShrink={0}>
             <Box flexDirection="column" gap={0} flexShrink={0}>
               <Text dimColor wrap="truncate">{`5H 重置 ${untilText(r5, now)}`}</Text>
               <Text dimColor wrap="truncate">{`7D 重置 ${untilText(r7, now)}`}</Text>
               <Text dimColor wrap="truncate">{`缓存 ${hit === null ? '--' : hit + '%'}${hitOld ? '*' : ''}`}</Text>
+              <Text dimColor wrap="truncate">{heartText}</Text>
             </Box>
             <Box flexDirection="column" gap={0} flexShrink={0}>
               <Text dimColor wrap="truncate">{`本会话 ${usd === null ? '--' : '$' + usd.toFixed(2)}`}</Text>
