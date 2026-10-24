@@ -163,7 +163,9 @@ def simulate(p: Profile, max_days=2500, stop_at_max=False, weekend_rule=True) ->
         if not p.week[d % 7]: continue
         st['day'] = d + 1
         wd = d % 7
-        cont = st['last'] is not None and (d - st['last'] == 1 or (weekend_rule and wd == 0 and d - st['last'] == 3))
+        gap = d - st['last'] if st['last'] is not None else 0
+        # v0.5.1: the days in between may be skipped when every one of them is a Saturday or a Sunday (wd 5 / 6); v0.5.0 only allowed Friday -> Monday
+        cont = st['last'] is not None and (gap == 1 or (weekend_rule and gap in (2, 3) and all((d - j) % 7 in (5, 6) for j in range(1, gap))))
         st['n'] = st['n'] + 1 if cont else 1
         st['last'] = d
         st['mx'] = max(st['mx'], st['n'])
@@ -233,6 +235,13 @@ def main():
     here = os.path.dirname(os.path.abspath(__file__))
     src = os.path.join(here, '..', '..', 'hooks', 'register.tsx')
     if '--check' in sys.argv: sys.exit(1 if check_against_source(src) else 0)
+    if '--e2e' in sys.argv:
+        # the deterministic behaviour of the day-by-day comparison with the real plugin (round 3/4): 30 turns and 5 pats a day, every day,
+        # nothing else (no tools, no night use, no errors, no compactions, no long tasks, no pokes or wakes)
+        for k in RATES: RATES[k] = 0.0
+        r = simulate(Profile('E2E', 30, 5, 0, EVERY, 0, 0, 0, 0, 0, 'e2e'), max_days=14)
+        print('SIM ' + str({d: int(v) for d, v in sorted(r.aff_by_day.items())}).replace("'", '"'))
+        return
     if os.path.exists(src): check_against_source(src)
     tot = sum(a[1] for a in ACHS)
     print(f'## 成就奖励（×1.3 取整后）\n\n- 41 个成就合计 {tot} 点，占满级所需 {THRESH[-1]} 点的 {100 * tot / THRESH[-1]:.1f}%（原奖励合计 {sum(r[1] for r in RAW)} 点）。')
