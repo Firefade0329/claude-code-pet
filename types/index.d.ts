@@ -41,6 +41,7 @@ declare module 'claude-code' {
       warnUntil: number
       moodKind: '' | 'calm' | 'happy' | 'sleepy' | 'worried' | 'excited'
       moodUntil: number
+      moodComforted: boolean
       tick: number
     }
   }

@@ -4,7 +4,7 @@ A small plugin for Claude Code that puts a Q-version maid mascot above the promp
 
 > **Language note:** all in-app text (her lines, buttons, achievements) is **Chinese (简体中文)** for now. It is an unofficial community plugin and is not affiliated with Anthropic.
 
-> **Tested version / 已测试版本：Claude Code 2.1.286** (desktop). Other versions are untested. The terminal layout has only been checked by automated tests, not by eye. 其他版本未验证；终端版只在自动化测试里验证过，没有实际观察。
+> **Tested version / 已测试版本：Claude Code 2.1.308** (desktop; automated tests also on 2.1.304). **2.1.286 and earlier are no longer verified** (the layout uses `columnGap` / `rowGap` since 0.4.1). The terminal layout has only been checked by automated tests, not by eye. 其他版本未验证；终端版只在自动化测试里验证过，没有实际观察。
 
 ## 截图 / Screenshots
 
@@ -72,11 +72,19 @@ A small plugin for Claude Code that puts a Q-version maid mascot above the promp
 
 升级所需的累计点数（部分）：Lv.2 = 10、Lv.7（进入朋友阶段）= 250、Lv.14（进入家人阶段）= 1000、Lv.20（满级）= 1975。
 
-**大致要多久**（每天用多少是我的假设，不是实测）：认真使用的人（每天 30 轮、摸头、天天打开）约 8 天到 Lv.7、30 天到 Lv.14、59 天满级；每天 15 轮、只在工作日用的人约 15 / 53 / 106 天（周末不断连续天数）；每天 100 轮的重度用户约 6 / 23 / 44 天。
+**大致要多久**（每天怎么用是我的假设，不是实测；用一份独立写的模拟算的，它和真实插件连续 14 天逐日对得上）。到 Lv.7 / Lv.14 / Lv.20 大约要：
 
-**连续天数**：周末休息不会断，周五用过、下周一接着用，连续天数继续；漏掉的是平常的工作日则从头开始。
+| 使用方式 | 天数 |
+|---|---|
+| 每天 30 轮、摸头 5 次、天天用、不开番茄钟 | 7 / 28 / 56 |
+| 每天 15 轮、摸头 5 次、只在工作日用、平均每天 0.3 个番茄钟 | 11 / 47 / 96 |
+| 每天 100 轮、摸头 5 次、天天用、不开番茄钟 | 6 / 23 / 47 |
 
-**从旧版本升级**：升级前的存档会一次性把点数抬到“你当时等级在新规则下的门槛”，所以不会因为规则变化掉级。
+每天摸头少于 5 次、或者哪天没用，天数会更长；每天的对话轮数超过 80 以后不再有帮助（到 Lv.20 最快也要 48 天左右）。
+
+**连续天数**：周六和周日**各自可以不用**，用不用都不影响：周五到周一、周六到周一、周五到周日都算连续；漏掉的只要有一天是平常的工作日，就从头开始。
+
+**从旧版本升级**：升级前的存档会一次性把点数抬到“你当时等级在新规则下的门槛”，所以不会因为规则变化掉级。几个对话同时首次启动时也只会抬一次（0.5.1 起：目标始终按升级前的点数算，存档里会多一个 `legacyAffection`）。
 
 **提醒**
 - 连续工作 1 小时提醒休息（可点“知道啦”）。超过 15 分钟没动静就算休息、重新计时；一轮运行很久的任务算连续工作；等你确认权限的时间不算。
@@ -88,11 +96,11 @@ A small plugin for Claude Code that puts a Q-version maid mascot above the promp
 
 **今日小结**：点“今日 N 轮 …”展开当天和累计的统计（窗口够宽时在右侧信息栏里，窗口较窄时在按钮行里）。
 
-**演示命令**：`/pet <long|rest|ach|hello|focus|break|compact|warn|level N|start|cancel|version>` 可以预览各种提醒和姿势，不计入任何统计（`/pet rest` 演示出来的休息提醒也不会让你累计“不听劝”）。
+**演示命令**：`/pet <long|rest|ach|hello|focus|break|compact|warn|level N|mood 名字|start|cancel|version>` 可以预览各种提醒和姿势，不计入任何统计（`/pet rest` 演示出来的休息提醒也不会让你累计“不听劝”）。
 
 ## 安装
 
-需要一个带插件“hooks 模块”能力的 Claude Code（开发和测试用的是 **2.1.286**，更早或更晚的版本没有验证过）。
+需要一个带插件“hooks 模块”能力的 Claude Code（现在开发和测试用的是 **2.1.308**，自动化测试也在 2.1.304 上跑过；最早的 2.1.286 现在**没有再验证**，其他版本没有验证过）。
 
 方式一：单次会话加载
 
@@ -110,13 +118,13 @@ claude --plugin-dir /path/to/pet
 }
 ```
 
-Windows 路径要写成 `D:\\path\\to\\pet`。以上安装方式在 Claude Code 2.1.286 上验证过，多个路径的分隔符等细节没有验证。新装或更新后，新开的对话会自动加载；已经打开的对话可以在输入框里输入 `/reload-plugins` 立即加载，再用 `/pet version` 确认加载的是哪一次构建。
+Windows 路径要写成 `D:\\path\\to\\pet`。以上安装方式最初在 Claude Code 2.1.286 上验证过，之后没有逐版本重新验证；多个路径的分隔符等细节没有验证。新装或更新后，新开的对话会自动加载；已经打开的对话可以在输入框里输入 `/reload-plugins` 立即加载，再用 `/pet version` 确认加载的是哪一次构建。
 
 ## 各界面的表现
 
 | 界面 | 表现 |
 |---|---|
-| 桌面端 Code 标签页 | 完整版：小人图像、进度条、按钮、右侧信息栏。窗口窄于约 90 格时自动隐藏右栏，“今日”和“成就”两个按钮会改到按钮行里，仍然可以点。 |
+| 桌面端 Code 标签页 | 完整版：小人图像、进度条、按钮、右侧信息栏。窗口窄于约 97 格时自动隐藏右栏（按钮行或“今日”文字变长时会更早切换；这个数是在作者一台电脑上量的，别人的缩放不同时可能差一两格），“今日”和“成就”两个按钮会改到按钮行里，仍然可以点。 |
 | 终端 | 精简版：一行文字状态加同样的按钮和面板，没有图片和进度条图形。 |
 | 其他界面 | 与终端相同的文字版。 |
 

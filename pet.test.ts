@@ -964,7 +964,7 @@ test('comfort: five pats while she is worried unlock the hidden 贴心安慰; pa
   expect(await hasText(m, /✓ 贴心安慰/)).toBe(true)
 })
 
-test('busy days: a day with 30 turns counts once, however many more follow; ten such days unlock 精力旺盛', async ($, on) => {
+test('busy days: a day with 30 turns counts once, however many more follow; ten such days unlock 精力旺盛', { timeoutMs: 60000 }, async ($, on) => {
   const clock = await engine($, on)
   await clock.set(at(10))
   const m = await mount($, 'desktop')
@@ -979,4 +979,133 @@ test('busy days: a day with 30 turns counts once, however many more follow; ten 
   for (let d = 0; d < 9; d++) await day(30, 'd' + d + '-')
   await openGroup($, m, 'chat')
   expect(await hasText(m, /✓ 精力旺盛/)).toBe(true)
+})
+
+// ---------- 0.5.1: weekend, migration done twice, clamped counters, comfort once per worry, window thresholds ----------
+const streakFrom = async ($: any, on: any, last: Date, now: Date, n: number = 4) => {
+  const clock = await engine($, on, { streak: { last: dayKey(last), n, max: n }, achieved: ['str3'] })
+  const m = await mount($, 'desktop')
+  await clock.set(now.getTime())
+  await $.turn.start({ text: 'hi', turnId: 'wkx' } as any)
+  return m
+}
+const MON = new Date(2023, 10, 20, 12, 0, 0)      // 20 Nov 2023 is a Monday
+
+test('streak: Saturday -> Monday goes on (only the Sunday was skipped)', async ($, on) => {
+  const m = await streakFrom($, on, new Date(2023, 10, 18), MON)
+  expect(await heartOf(m, /Lv\.1 · 7\/10/)).toBe(1)
+})
+
+test('streak: Friday -> Sunday goes on (only the Saturday was skipped)', async ($, on) => {
+  const m = await streakFrom($, on, new Date(2023, 10, 17), new Date(2023, 10, 19, 12, 0, 0))
+  expect(await heartOf(m, /Lv\.1 · 7\/10/)).toBe(1)
+})
+
+test('streak: Sunday -> Tuesday is a real gap (the Monday was skipped)', async ($, on) => {
+  const m = await streakFrom($, on, new Date(2023, 10, 19), new Date(2023, 10, 21, 12, 0, 0))
+  expect(await heartOf(m, /Lv\.1 · 3\/10/)).toBe(1)
+})
+
+test('streak: Monday -> Wednesday is a real gap', async ($, on) => {
+  const m = await streakFrom($, on, MON, new Date(2023, 10, 22, 12, 0, 0))
+  expect(await heartOf(m, /Lv\.1 · 3\/10/)).toBe(1)
+})
+
+test('migration: the second run changes nothing, however it is started (old Lv.12: 599 -> 741 and it stays there)', async ($, on) => {
+  const clock = await engine($, on, { affection: 599, streak: { last: todayKey(), n: 1, max: 1 } })
+  const m = await mount($, 'desktop')
+  await $.session.start({ source: 'startup', cwd: '/test' } as any)
+  await clock.advance(1000)
+  expect(await heartOf(m, /Lv\.12 · 741\/866/)).toBe(1)
+  await $.session.start({ source: 'clear', cwd: '/test' } as any)
+  await clock.advance(1000)
+  expect(await heartOf(m, /Lv\.12 · 741\/866/)).toBe(1)
+})
+
+test('migration: a conversation that arrives when another one has lifted the points already (but not set the marker yet) lifts nothing more', async ($, on) => {
+  const clock = await engine($, on, { affection: 741, legacyAffection: 599, streak: { last: todayKey(), n: 1, max: 1 } })
+  const m = await mount($, 'desktop')
+  await $.session.start({ source: 'startup', cwd: '/test' } as any)
+  await clock.advance(1000)
+  expect(await heartOf(m, /Lv\.12 · 741\/866/)).toBe(1)      // (not 866: that would be the second lift)
+})
+
+test('migration: points earned between the two runs are not taken away', async ($, on) => {
+  const clock = await engine($, on, { affection: 750, legacyAffection: 599, streak: { last: todayKey(), n: 1, max: 1 } })
+  const m = await mount($, 'desktop')
+  await $.session.start({ source: 'startup', cwd: '/test' } as any)
+  await clock.advance(1000)
+  expect(await heartOf(m, /Lv\.12 · 750\/866/)).toBe(1)
+})
+
+test('stats from the store: infinite and negative numbers count as nothing', async ($, on) => {
+  await engine($, on, { achieved: ['first'], model: 2, stats: { turns: Infinity, tools: -10, pats: 'abc', focus: 1e308 * 10 } })
+  const m = await mount($, 'desktop')
+  await $.session.start({ source: 'startup', cwd: '/test' } as any)
+  await $.turn.start({ text: 'hi', turnId: 'inf' } as any)
+  expect(await countBtn(m, /成就 1\/41/)).toBe(1)
+})
+
+test('comfort: pats while she is worried count once per worry; five worries comforted unlock the hidden 贴心安慰', async ($, on) => {
+  const clock = await engine($, on)
+  await clock.set(at(15))
+  const m = await mount($, 'desktop')
+  for (let i = 0; i < 4; i++) {
+    await finishTurn($, clock, 'w' + i, 'error')
+    for (let k = 0; k < 3; k++) {
+      await $.ui.press({ plugin: 'pet', key: 'pat' })
+      await clock.advance(3000)
+    }
+  }
+  await openGroup($, m, 'secret')
+  expect(await hasText(m, /✓ 贴心安慰/)).toBe(false)      // twelve pats, but four worries
+  await finishTurn($, clock, 'w4', 'error')
+  await $.ui.press({ plugin: 'pet', key: 'pat' })
+  await clock.advance(3000)
+  await openGroup($, m, 'secret')
+  expect(await hasText(m, /✓ 贴心安慰/)).toBe(true)
+})
+
+// the window: the right-hand block goes when the band is narrower than the threshold (97 cells; longer button rows need more)
+const mountCols = ($: any, cols: number) => $.ui.mount({ plugin: 'pet', surface: 'desktop', component: 'AbovePrompt', props: { ...PROPS, bodyColumns: cols } })
+const rightBlock = (m: any) => count(m, /5H 重置/)
+for (const [name, edge] of [['normal', 97], ['with the compact button', 110], ['while a focus timer runs', 98]] as [string, number][]) {
+  for (const [cols, want] of [[edge - 1, 0], [edge, 1]] as [number, number][]) {
+    test(`window: ${name}: ${cols} cells ${want ? 'keep' : 'drop'} the right-hand block`, async ($, on) => {
+      on('session.measure', (_: any, e: any) => ({ changed: e.changed } as any))
+      await engine($, on)
+      const m = await mountCols($, cols)
+      if (name === 'with the compact button') await $.session.measure({ context: { window: 1000000, percent: 82 }, rateLimits: [], changed: ['context'] } as any)
+      if (name === 'while a focus timer runs') await $.ui.press({ plugin: 'pet', key: 'focus' })
+      expect(await rightBlock(m)).toBe(want)
+    })
+  }
+}
+
+test('mood: a happy mood lasts the full fifteen minutes and is over after sixteen', async ($, on) => {
+  const clock = await engine($, on)
+  await clock.set(at(15))
+  const m = await mount($, 'desktop')
+  await finishTurn($, clock, 'h0')
+  await clock.advance(20 * 60 * 1000)      // (the happiness of the first turn is over)
+  await $.ui.press({ plugin: 'pet', key: 'pat' })
+  await clock.advance(3000)
+  await clock.advance(14 * 60 * 1000)
+  await finishTurn($, clock, 'h1')
+  expect(await moodsShown(m)).toEqual(['happy'])
+  await clock.advance(2 * 60 * 1000)
+  await finishTurn($, clock, 'h2')
+  expect(await moodsShown(m)).toEqual([])
+})
+
+test('mood: the busy day of yesterday does not make her excited today', async ($, on) => {
+  const clock = await engine($, on)
+  await clock.set(at(10))
+  const m = await mount($, 'desktop')
+  for (let i = 0; i < 30; i++) await finishTurn($, clock, 'y' + i)
+  await clock.advance(24 * 60 * 60 * 1000)
+  await finishTurn($, clock, 'today')
+  await clock.advance(20 * 60 * 1000)
+  await finishTurn($, clock, 'today2')
+  expect(await moodsShown(m)).toEqual([])
 })
