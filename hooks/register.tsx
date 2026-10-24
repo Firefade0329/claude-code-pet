@@ -31,6 +31,7 @@ const BLINK: Partial<Record<Sprite, { b: string; box: number[] }>> = {
   focus: { b: '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', box: [63.16, 68.42, 63.51, 24.21] },
   worry: { b: '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', box: [64.74, 64.04, 64.21, 26.67] },
   compact: { b: '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', box: [64.21, 65.96, 64.56, 25.96] },
+  sleepy: { b: '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', box: [67.02, 67.89, 59.47, 25.26] },
 }
 // ---- end generated ----
 
@@ -50,7 +51,7 @@ const cacheAll = atom({ plugin: 'pet', key: 'cacheAll' } as const, 0)
 const cacheOld = atom({ plugin: 'pet', key: 'cacheOld' } as const, false)     // cacheHit restored from the last run
 const cost = atom({ plugin: 'pet', key: 'cost' } as const, null as number | null)
 const today = atom({ plugin: 'pet', key: 'today' } as const, { d: '', turns: 0, tools: 0, pats: 0, focus: 0, rests: 0, pts: 0 } as Today)
-const stats = atom({ plugin: 'pet', key: 'stats' } as const, { turns: 0, tools: 0, pats: 0, focus: 0, night: 0, longest: 0, pokes: 0, compacts: 0, breaks: 0, errors: 0, wakes: 0, bursts: 0, ignored: 0, peak: 0 } as Stats)
+const stats = atom({ plugin: 'pet', key: 'stats' } as const, { turns: 0, tools: 0, pats: 0, focus: 0, night: 0, longest: 0, pokes: 0, compacts: 0, breaks: 0, errors: 0, wakes: 0, bursts: 0, ignored: 0, recoveries: 0, busyDays: 0, comforts: 0, peak: 0 } as Stats)
 const streak = atom({ plugin: 'pet', key: 'streak' } as const, { last: '', n: 0, max: 0 } as Streak)
 const achieved = atom({ plugin: 'pet', key: 'achieved' } as const, [] as string[])
 const showAch = atom({ plugin: 'pet', key: 'showAch' } as const, false)
@@ -72,6 +73,8 @@ const armed5 = atom({ plugin: 'pet', key: 'armed5' } as const, true)         // 
 const armedC = atom({ plugin: 'pet', key: 'armedC' } as const, true)
 const warnKind = atom({ plugin: 'pet', key: 'warnKind' } as const, '' as '' | '5h' | 'ctx')
 const warnUntil = atom({ plugin: 'pet', key: 'warnUntil' } as const, 0)
+const moodKind = atom({ plugin: 'pet', key: 'moodKind' } as const, '' as '' | 'calm' | 'happy' | 'sleepy' | 'worried' | 'excited')      // a good or a bad thing happened lately (not saved: a mood is short-lived); the others only come from the /pet mood demo
+const moodUntil = atom({ plugin: 'pet', key: 'moodUntil' } as const, 0)
 const tick = atom({ plugin: 'pet', key: 'tick' } as const, 0)         // bumped once a minute so the countdowns move
 
 const SLEEP_AFTER_MS = 5 * 60 * 1000
@@ -91,6 +94,22 @@ const SUM_LABEL_BASE = 21
 const ROW_BASE_COST = 40
 const cells = (t: string) => Array.from(t).reduce((n, ch) => n + ((ch.codePointAt(0) as number) >= 0x2e80 ? 2 : 1), 0)
 const rowCost = (labels: string[]) => labels.reduce((n, t) => n + cells(t) + 3, 0)
+// ---- mood ----
+// A mood is worked out from what is going on, and is never saved. It only changes the face and the line she shows while she is plainly idle.
+// From the strongest: worried (an error just happened), happy (a good thing just happened), sleepy (late at night), excited (a busy day), else calm.
+type Mood = 'calm' | 'happy' | 'sleepy' | 'worried' | 'excited'
+const HAPPY_MS = 15 * 60 * 1000
+const WORRIED_MS = 5 * 60 * 1000
+const NIGHT_FROM = 23      // from this hour (local time) until 5 in the morning she is sleepy
+const EXCITED_TURNS = 30      // turns today from which the day counts as a busy one
+const MOOD_SPRITE: Record<Mood, Sprite> = { calm: 'idle', happy: 'proud', sleepy: 'sleepy', worried: 'worry', excited: 'start' }
+const moodOf = (now: number, kind: '' | Mood, until: number, turnsToday: number): Mood => {
+  const hour = new Date(now).getHours()
+  if (kind !== '' && now < until) return kind      // (a bad thing, a good thing, or what the /pet mood demo asked for)
+  if (hour >= NIGHT_FROM || hour < 5) return 'sleepy'
+  if (turnsToday >= EXCITED_TURNS) return 'excited'
+  return 'calm'
+}
 const COMPACT_BTN_AT = 80      // the "compact" button appears from this context fill (%)
 const WARN_MS = 5 * 60 * 1000                 // a usage warning goes away by itself after this long
 const WARN_5H = 80
@@ -101,8 +120,9 @@ const LONG_TOAST_MS = 10000            // how long the long-task, rest-reminder 
 const REST_AFTER_MS = 60 * 60 * 1000      // "you have been working for an hour"
 const WORK_GAP_MS = 15 * 60 * 1000        // a break this long starts a new stretch of work
 const FOCUS_MS = 25 * 60 * 1000
-const BUILD_INFO = 'v0.4.2 · built 2026-10-22 20:50'      // filled in by build.py: tells which build a conversation has loaded (/pet version)
+const BUILD_INFO = 'v0.5.0 · built 2026-10-24 16:25'      // filled in by build.py: tells which build a conversation has loaded (/pet version)
 let demoRemind = false      // true while the reminder on screen comes from the /pet rest demo (continuing is not counted)
+let moodDemoUntil = 0      // end time of a mood shown by the /pet mood demo (a demo worry is not a real worry: no recovery, no comfort is counted)
 let demoBreakEnd = 0      // end time of a break started by the /pet break demo
 let lastLimits = ''      // what was last written to the store as 'limits' / 'cacheHit' by this conversation (no write when nothing changed)
 let lastHit = -1
@@ -273,10 +293,31 @@ const T: Record<string, string[][]> = {
   hello0: [['早上好，主人。今天也请多关照。'], ['主人，中午好，记得吃饭。'], ['下午好，主人。'], ['晚上好，主人，今天辛苦了。'], ['主人，夜深了，请注意休息。']],
   hello1: [['早啊主人～今天也要加油哦！'], ['中午啦，别光顾着干活，先吃饭！'], ['下午好～来杯茶提提神？'], ['晚上好～今天过得怎么样？'], ['这么晚还不睡？不许熬夜哦！']],
   hello2: [['早上好呀，今天也想和你一起度过。'], ['中午好，吃过饭了吗？我有点惦记你。'], ['下午好，看到你就安心了。'], ['你回来啦，今天辛苦了。'], ['这么晚了，早点睡吧，我陪你到最后一刻。']],
+  // what she says while she is plainly idle, by mood (the calm ones are `idle`)
+  idle_happy: [
+    ['今天心情很好，主人。', '托主人的福，一切顺利。', '能为主人效劳，我很高兴。', '请放心，我状态很好。'],
+    ['嘿嘿，今天心情超好～', '做完这个我整个人都轻飘飘的！', '怎么样，我今天是不是特别可靠？', '开心！想原地转个圈～', '再来点活儿也没问题哦！'],
+    ['今天心情很好，因为你在。', '和你一起做到的，我都记着呢。', '看到你笑，我就更开心了。', '这一刻很好，我想多留一会儿。'],
+  ],
+  idle_sleepy: [
+    ['夜深了，主人，请早些休息。', '已经很晚了，请注意身体。', '（轻轻打了个哈欠）失礼了。', '主人，熬夜对身体不好。'],
+    ['（打哈欠）好困呀……你还不睡？', '都这么晚啦，明天再干吧～', '我眼睛要睁不开啦……', '再不睡明天要顶着黑眼圈啦！'],
+    ['这么晚了，我陪着你，但你要早点睡。', '（揉眼睛）我还撑得住，你呢？', '困了就说，我给你盖个小毯子。', '今晚就到这儿好不好？明天我还在。'],
+  ],
+  idle_worried: [
+    ['主人，情况似乎不太理想，请留意。', '有些状况需要留心，请稍加注意。', '我有些担心，请主人多加留意。'],
+    ['呜，感觉有点不妙……要小心哦。', '怎么办怎么办，好像有点吃紧～', '我有点慌，先别着急好不好？', '盯着呢盯着呢，但你也看看吧。'],
+    ['别担心，我在这里，我们一起想办法。', '我有点担心你，先深呼吸一下。', '不管怎样，我都站在你这边。', '慢慢来，没有什么是解决不了的。'],
+  ],
+  idle_excited: [
+    ['今天事务颇多，我已准备妥当。', '今天进展不错，请继续吩咐。', '主人今天格外勤勉，我也不敢懈怠。'],
+    ['今天好多事啊！我都兴奋起来啦～', '状态拉满！下一个任务是什么？', '今天的你简直是效率怪兽！', '来来来，继续继续，我跟得上！'],
+    ['今天好充实呀，和你一起忙，我很开心。', '你今天好拼，我也想陪你冲到最后。', '能帮上你这么多，我特别有成就感。', '今天的我们，是不是很棒？'],
+  ],
 } as any
 
 // The four lines seen all day long (idle, work, think, done) are never the same twice in a row; the pick is kept for as long as the seed stays the same.
-const NO_REPEAT = ['idle', 'work', 'think', 'done']
+const NO_REPEAT = ['idle', 'work', 'think', 'done', 'idle_happy', 'idle_sleepy', 'idle_worried', 'idle_excited']
 const lastPick: Record<string, { seed: number; text: string }> = {}
 const say = (cat: string, lvl: number, seed: number, vars?: Record<string, string | number>) => {
   const arr = T[cat][stageOf(lvl)]
@@ -316,9 +357,41 @@ async function quietly(fn: () => Promise<unknown>) {
   }
 }
 
+// Something good (a pat, a finished timer or rest, an achievement, a level) or bad (an error) just happened. A worry is not cheered away by a good thing.
+async function feel($: any, kind: 'happy' | 'worried') {
+  await quietly(async () => {
+    const now = await $.clock.now()
+    const cur = await read($, moodKind)
+    const until = await read($, moodUntil)
+    if (kind === 'happy' && cur === 'worried' && now < until) return
+    await update($, moodKind, () => kind)
+    await update($, moodUntil, () => now + (kind === 'happy' ? HAPPY_MS : WORRIED_MS))
+  })
+}
+
+// Is she worried right now, for real (not because of the /pet mood demo)?
+async function reallyWorried($: any, now: number) {
+  const until = await read($, moodUntil)
+  return (await read($, moodKind)) === 'worried' && now < until && until !== moodDemoUntil
+}
+
+// A turn that went well while she was worried: the worry is over, she is happy, and it counts as a recovery.
+async function recoverMood($: any, now: number): Promise<boolean> {
+  try {
+    const real = await reallyWorried($, now)
+    if ((await read($, moodKind)) === 'worried' && now < (await read($, moodUntil))) {
+      await update($, moodKind, () => 'happy' as const)
+      await update($, moodUntil, () => now + HAPPY_MS)
+    }
+    return real
+  } catch (err) {
+    return false
+  }
+}
+
 // ---- lifetime counters ----
 // Stats saved by an older version lack the newer fields: they count from 0.
-const SUM_KEYS = ['turns', 'tools', 'pats', 'focus', 'night', 'pokes', 'compacts', 'breaks', 'errors', 'wakes', 'bursts', 'ignored'] as const
+const SUM_KEYS = ['turns', 'tools', 'pats', 'focus', 'night', 'pokes', 'compacts', 'breaks', 'errors', 'wakes', 'bursts', 'ignored', 'recoveries', 'busyDays', 'comforts'] as const
 const MAX_KEYS = ['longest', 'peak'] as const
 const normStats = (x?: Partial<Stats> | null): Stats => {
   const o: any = {}
@@ -357,6 +430,7 @@ const ACHS: Ach[] = [
   A('t1000', 'chat', '千锤百炼', '累计完成 1000 轮', 8, 1000, c => c.s.turns),
   A('t3000', 'chat', '身经百战', '累计完成 3000 轮', 12, 3000, c => c.s.turns),
   A('day50', 'chat', '忙碌的一天', '一天内完成 50 轮', 5, 50, c => c.today.turns),
+  A('busy10', 'chat', '精力旺盛', '累计 10 天，每天对话达到 30 轮', 4, 10, c => c.s.busyDays),
   A('tool1k', 'chat', '工具达人', '累计 1000 次工具调用', 4, 1000, c => c.s.tools),
   A('tool5k', 'chat', '工具大师', '累计 5000 次工具调用', 8, 5000, c => c.s.tools),
   A('str3', 'bond', '三天之约', '连续 3 天打开', 3, 3, c => c.k.max),
@@ -383,11 +457,13 @@ const ACHS: Ach[] = [
   A('long30', 'misc', '马拉松', '一轮任务超过 30 分钟', 8, 30, c => Math.floor(c.s.longest / 60000)),
   A('cmp1', 'misc', '轻装上阵', '压缩一次上下文', 2, 1, c => c.s.compacts),
   A('cmp10', 'misc', '整理大师', '压缩 10 次上下文', 6, 10, c => c.s.compacts),
+  A('recover', 'misc', '雨过天晴', '她担心的时候，成功完成一轮对话 10 次', 4, 10, c => c.s.recoveries),
   A('peak', 'misc', '极限操作', '5 小时额度用到 95% 以上', 5, 1, c => c.s.peak),
   A('err10', 'misc', '屡败屡战', '经历 10 次出错', 4, 10, c => c.s.errors),
   A('wake', 'secret', '别吵醒我', '把睡着的她戳醒 10 次', 5, 10, c => c.s.wakes, true),
   A('burst', 'secret', '戳戳戳', '10 秒内连续戳她 5 次', 5, 1, c => c.s.bursts, true),
   A('ignore', 'secret', '不听劝', '休息提醒出现后没点“知道啦”，又发了 5 条消息', 5, 5, c => c.s.ignored, true),
+  A('comfort', 'secret', '贴心安慰', '她担心的时候摸摸头安慰她 5 次', 4, 5, c => c.s.comforts, true),
   A('all', 'secret', '全部收集', '解锁所有普通成就', 10, 0, c => ACHS.filter(a => !a.hid && c.have.includes(a.id)).length - ACHS.filter(a => !a.hid).length, true),
 ]
 
@@ -413,20 +489,25 @@ const ANIM: Record<Sprite, string> = {
   wait: '<animateTransform attributeName="transform" type="rotate" values="-3 100 210;3 100 210;-3 100 210" dur="1.6s" repeatCount="indefinite"/>',
   done: '<animateTransform attributeName="transform" type="translate" values="0 0;0 -14;0 0;0 -9;0 0" dur="1.4s" repeatCount="2"/>',
   sleep: '<animateTransform attributeName="transform" type="translate" values="0 0;0 2;0 0" dur="4.5s" repeatCount="indefinite"/>',
+  sleepy: '<animateTransform attributeName="transform" type="translate" values="0 0;0 3;0 0" dur="5s" repeatCount="indefinite"/>',
   compact: '<animateTransform attributeName="transform" type="translate" values="0 0;-3 0;3 0;-3 0;0 0" dur="0.45s" repeatCount="indefinite"/>',
 }
 
 // Poses with a closed-eye patch get it inside the SAME svg: the patch is faded in for a moment by the svg itself.
 // (Swapping the whole svg for a blink restarted its bobbing animation, which looked like a jolt.)
 const svgMemo: Record<string, string> = {}
-const petSvg = (m: Sprite, img: string) => {
-  const key = m + '|' + img.length
+// As a mood (not as the quick reaction to an error) she must not keep moving: the fretting shakes a few times, then she keeps still.
+const MOOD_ANIM: Partial<Record<Sprite, string>> = {
+  worry: '<animateTransform attributeName="transform" type="translate" values="-1.5 0;1.5 0;-1.5 0" dur="0.4s" repeatCount="8"/>',
+}
+const petSvg = (m: Sprite, img: string, asMood: boolean = false) => {
+  const key = m + '|' + img.length + (asMood ? '|mood' : '')
   if (svgMemo[key] !== undefined) return svgMemo[key]
   const bl = BLINK[m]
   const blink = bl
     ? `<image x="${bl.box[0]}" y="${bl.box[1]}" width="${bl.box[2]}" height="${bl.box[3]}" opacity="0" href="data:image/webp;base64,${bl.b}"><animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;0.90;0.905;0.945;0.95;1" dur="4.6s" repeatCount="indefinite"/></image>`
     : ''
-  svgMemo[key] = `<svg xmlns="http://www.w3.org/2000/svg" width="96" height="105" viewBox="0 0 201 220"><g>${ANIM[m]}<image width="201" height="220" href="data:image/webp;base64,${img}"/>${blink}</g></svg>`
+  svgMemo[key] = `<svg xmlns="http://www.w3.org/2000/svg" width="96" height="105" viewBox="0 0 201 220"><g>${(asMood && MOOD_ANIM[m]) || ANIM[m]}<image width="201" height="220" href="data:image/webp;base64,${img}"/>${blink}</g></svg>`
   return svgMemo[key]
 }
 
@@ -540,6 +621,7 @@ async function checkAchLocked($: any) {
 async function checkAch($: any) {
   const r = await locked(() => checkAchLocked($))
   if (!r.fresh.length) return
+  await feel($, 'happy')
   const names = r.fresh.map(a => a.name)
   if (names.length > 3) {
     const line = `一口气解锁了 ${names.length} 个成就：${names.slice(0, 3).join('、')}等`
@@ -568,6 +650,7 @@ async function addAffection($: any, n: number, check: boolean = true) {
   const l0 = levelOf(before)
   const l1 = levelOf(after)
   if (l1 > l0) {
+    await feel($, 'happy')
     const line = say('levelUp', l1, l1, { l: l1 })
     $.ui.toast(line, { timeoutMs: LONG_TOAST_MS })
     await flash($, line, ('up' + stageOf(l1)) as Sprite, LEVEL_UP_MS)
@@ -631,13 +714,15 @@ async function react($: any, kind: 'pat' | 'poke') {
   await update($, reactToken, () => token)
   if (wasAsleep) await setMode($, 'idle')
   if (kind === 'pat') {
+    const comforting = await reallyWorried($, now)      // (asked before the good feeling below: a pat does not end a worry, but it counts as comfort)
+    await feel($, 'happy')
     // today's pats are counted in the store: another conversation may have used some of the five already
     const counted = await locked(() => takePatLocked($, now))
     if (counted) {
-      await bumpStats($, { pats: 1 }, false)
+      await bumpStats($, { pats: 1, comforts: comforting ? 1 : 0 }, false)
       await addAffection($, 1)
     } else {
-      await bumpStats($, { pats: 1 })
+      await bumpStats($, { pats: 1, comforts: comforting ? 1 : 0 })
     }
   } else {
     recentPokes = recentPokes.filter(x => now - x < 10000)
@@ -746,6 +831,7 @@ async function finishFocus($: any, endedAt: number) {
   await bumpStats($, { focus: 1 }, false)
   if (day.focus <= FOCUS_PAID_PER_DAY) await addAffection($, 2)
   else await checkAch($)
+  await feel($, 'happy')
   $.ui.toast(say('focusDone', lvl, endedAt / 1000))
   await setMode($, 'done')
   await settleLater($, 'done')
@@ -779,6 +865,7 @@ async function finishBreak($: any, end: number) {
     await bumpStats($, { breaks: 1 }, false)
     if (day.rests <= REST_PAID_PER_DAY) await addAffection($, 1)
     else await checkAch($)
+    await feel($, 'happy')
   }
   const line = say('breakDone', lvl, end / 1000)
   $.ui.toast(line, { timeoutMs: LONG_TOAST_MS })
@@ -901,7 +988,7 @@ async function restoreSaved($: any) {
 // declared once, when the session starts
 async function registerDemo($: any) {
   try {
-    await $.command.register({ name: 'pet', description: '演示桌宠的提醒和姿势', argumentHint: '[long|rest|ach|hello|focus|break|compact|warn|level|start|cancel|version]' })
+    await $.command.register({ name: 'pet', description: '演示桌宠的提醒和姿势', argumentHint: '[long|rest|ach|hello|focus|break|compact|warn|level|mood|start|cancel|version]' })
   } catch (err) {
     // the demo command is optional
   }
@@ -963,6 +1050,14 @@ async function demo($: any, what: string): Promise<string> {
     })
     return '演示：压缩中 15 秒，然后显示整理完毕'
   }
+  if (what.startsWith('mood')) {
+    const name = what.slice(4).trim()
+    if (!['calm', 'happy', 'sleepy', 'worried', 'excited'].includes(name)) return '用法：/pet mood calm | happy | sleepy | worried | excited（演示 2 分钟；只在她安安静静待机时才显示，工作、提醒和计时期间不显示）'
+    moodDemoUntil = now + 2 * 60 * 1000
+    await update($, moodKind, () => name as '' | Mood)
+    await update($, moodUntil, () => moodDemoUntil)
+    return '演示：心情「' + name + '」2 分钟（只是演示，不计入任何统计）'
+  }
   if (what === 'version') return '桌宠 ' + BUILD_INFO
   if (what === 'break') {
     const end = now + 60000
@@ -977,7 +1072,7 @@ async function demo($: any, what: string): Promise<string> {
     return '演示：番茄钟结束'
   }
   $.ui.toast('这就是弹出提示的样子，会停留 10 秒。', { timeoutMs: LONG_TOAST_MS })
-  return '用法：/pet long | rest | ach | hello | focus | break | compact | warn | level | start | cancel | version（只是演示，不计入任何统计）'
+  return '用法：/pet long | rest | ach | hello | focus | break | compact | warn | level | mood | start | cancel | version（只是演示，不计入任何统计）'
 }
 
 export const register: Register = on => {
@@ -1104,7 +1199,8 @@ export const register: Register = on => {
         const lvl = levelOf(await read($, affection))
         const day = await bumpToday($, 1, tools, 0, 0)
         const hour = new Date(now).getHours()
-        await bumpStats($, { turns: 1, tools, night: hour < 5 ? 1 : 0, longest: e.durationMs }, false)
+        const recovered = await recoverMood($, now)
+        await bumpStats($, { turns: 1, tools, night: hour < 5 ? 1 : 0, longest: e.durationMs, recoveries: recovered ? 1 : 0, busyDays: day.turns === EXCITED_TURNS ? 1 : 0 }, false)      // (busyDays: the day just reached 30 turns)
         const pay = turnPoints(day.turns)
         if (pay > 0) await addAffection($, pay)
         else await checkAch($)
@@ -1119,6 +1215,7 @@ export const register: Register = on => {
         await setMode($, 'worry')
         await settleLater($, 'worry')
         await bumpStats($, { errors: 1 })
+        await feel($, 'worried')
       } else {
         await setMode($, 'idle')
       }
@@ -1257,6 +1354,16 @@ export const register: Register = on => {
     const gone = sameDay ? td : emptyToday()
     const achCtx: Ctx = { s: normStats(stt), k: sk, lvl, today: gone, have }
 
+    // only the plain idle state takes on a mood: working, thinking, reactions, reminders, warnings and the timers keep their own face and line
+    let asMood = false
+    if (m === 'idle' && rk === 'none' && !due && !warn && fe === 0 && be === 0) {
+      const mood = moodOf(now, await read($, moodKind), await read($, moodUntil), sameDay ? td.turns : 0)
+      if (mood !== 'calm') {
+        shown = MOOD_SPRITE[mood]
+        asMood = true
+        line = say('idle_' + mood, lvl, Math.floor(t / 1000))
+      }
+    }
     const sumLabel = `今日 ${gone.turns} 轮·${gone.tools} 工具·${gone.focus} 番茄 ${sum ? '▾' : '▸'}`
     const rowLabels = ['摸摸头', '戳一下'].concat(
       be > 0 ? [] : fe > 0 ? [`放弃 · 剩${focusLeft}分`] : ['专注 25 分钟'],
@@ -1331,7 +1438,7 @@ export const register: Register = on => {
     return (
       <Box flexDirection="column">
         <Box flexDirection="row" alignItems="center" gap={1} paddingX={1}>
-          <Svg source={petSvg(shown, sprite)} alt={`pet: ${shown}`} width={96} height={105} />
+          <Svg source={petSvg(shown, sprite, asMood)} alt={`pet: ${shown}`} width={96} height={105} />
           <Box flexDirection="column" gap={0}>
             <Svg source={barsSvg(c, f5, f7, faded)} alt="usage bars" width={262} height={64} />
             <Box flexDirection="row" gap={2}>
