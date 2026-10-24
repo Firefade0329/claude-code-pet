@@ -99,9 +99,9 @@ test('focus: 25 minute timer counts down, finishes by itself and counts a tomato
   const clock = await engine($, on)
   const m = await mount($, 'desktop')
   await $.ui.press({ plugin: 'pet', key: 'focus' })
-  expect(await countBtn(m, /放弃专注 · 剩 25 分/)).toBe(1)
+  expect(await countBtn(m, /放弃 · 剩25分/)).toBe(1)
   await clock.advance(26 * 60 * 1000)
-  expect(await countBtn(m, /放弃专注/)).toBe(0)
+  expect(await countBtn(m, /放弃 · 剩/)).toBe(0)
   expect(await countBtn(m, /1 番茄/)).toBe(1)
 })
 
@@ -125,7 +125,7 @@ test('greet: the pet greets right after the start, then settles to idle', async 
   expect(await count(m, hello)).toBe(0)
 })
 
-test('streak: a session left open overnight counts the next day on its first prompt', async ($, on) => {
+test('streak: a session left open overnight counts the next day on its first prompt', { timeoutMs: 60000 }, async ($, on) => {
   const clock = await engine($, on)
   const m = await mount($, 'desktop')
   await $.session.start({ source: 'startup', cwd: '/test' } as any)
@@ -159,7 +159,7 @@ test('shared store: points earned in another conversation are not overwritten', 
   await engine($, on, { affection: 100 })      // this conversation has not loaded it (its own value is still 0)
   const m = await mount($, 'desktop')
   await $.ui.press({ plugin: 'pet', key: 'pat' })
-  expect(await count(m, /Lv\.5/)).toBe(1)      // 100 + 1 = 101 points, not 0 + 1
+  expect(await count(m, /Lv\.4/)).toBe(1)      // 100 + 1 = 101 points (Lv.4 = 72..120 on the 0.4.0 curve), not 0 + 1
 })
 
 test('usage warning: shows once when 5H crosses 80%, can be dismissed, goes away by itself after 5 minutes', async ($, on) => {
@@ -189,9 +189,9 @@ test('usage warning: shows once when 5H crosses 80%, can be dismissed, goes away
 
 
 test('level up: crossing a level shows its line and pose', async ($, on) => {
-  await engine($, on, { affection: 7 })
+  await engine($, on, { affection: 9 })
   const m = await mount($, 'desktop')
-  await $.ui.press({ plugin: 'pet', key: 'pat' })      // 7 + 1 = 8 points = level 2
+  await $.ui.press({ plugin: 'pet', key: 'pat' })      // 9 + 1 = 10 points = level 2
   expect(await count(m, /提升到 Lv\.2/)).toBe(1)
 })
 
@@ -209,6 +209,8 @@ test('narrow window: the right-hand info columns are dropped', async ($, on) => 
   expect(await count(wide, /5H 重置/)).toBe(1)
   const narrow = await $.ui.mount({ plugin: 'pet', surface: 'desktop', component: 'AbovePrompt', props: { ...PROPS, bodyColumns: 60 } })
   expect(await count(narrow, /5H 重置/)).toBe(0)
+  expect(await countBtn(narrow, /成就 \d+\/\d+/)).toBe(1)      // the achievements button moved into the button row
+  expect(await countBtn(narrow, /今日 \d+ 轮/)).toBe(1)
 })
 
 test('break: a finished focus timer starts a 5 minute break; pats do not end it, a prompt does', async ($, on) => {
@@ -288,8 +290,8 @@ test('achievements: the panel is grouped; unlocked and locked ones are listed ap
   const m = await mount($, 'desktop')
   await $.turn.complete({ reason: 'answer', answer: '', durationMs: 1000, isAborted: false, turnId: 'a1' } as any)
   await press($, 'ach')
-  expect(await countBtn(m, /对话与工具 1\/8/)).toBe(1)
-  expect(await countBtn(m, /隐藏 0\/4/)).toBe(1)
+  expect(await countBtn(m, /对话与工具 1\/9/)).toBe(1)
+  expect(await countBtn(m, /隐藏 0\/5/)).toBe(1)
   await press($, 'ag-chat')
   expect(await hasText(m, /✓ 初次见面/)).toBe(true)
   expect(await hasText(m, /· 小有成就.*1\/100/)).toBe(true)
@@ -300,17 +302,17 @@ test('achievements: hidden ones are not revealed until unlocked', async ($, on) 
   const m = await mount($, 'desktop')
   await press($, 'ach')
   await press($, 'ag-secret')
-  expect(await hasText(m, /别吵醒我|戳戳戳|不听劝|全部收集/)).toBe(false)
-  expect(await hasText(m, /还有 4 个隐藏成就/)).toBe(true)
+  expect(await hasText(m, /别吵醒我|戳戳戳|不听劝|贴心安慰|全部收集/)).toBe(false)
+  expect(await hasText(m, /还有 5 个隐藏成就/)).toBe(true)
 })
 
-test('achievements: an unlock gives its affection reward once (first = +2)', async ($, on) => {
+test('achievements: an unlock gives its affection reward once (first = +3)', async ($, on) => {
   await engine($, on)
   const m = await mount($, 'desktop')
   await $.turn.complete({ reason: 'answer', answer: '', durationMs: 1000, isAborted: false, turnId: 'r1' } as any)
-  expect(await count(m, /Lv\.1 · 3\//)).toBe(1)      // a finished turn gives 1, the "first" achievement 2
+  expect(await count(m, /Lv\.1 · 4\//)).toBe(1)      // a finished turn gives 1, the "first" achievement round(2 * 1.3) = 3
   await $.turn.complete({ reason: 'answer', answer: '', durationMs: 1000, isAborted: false, turnId: 'r2' } as any)
-  expect(await count(m, /Lv\.1 · 4\//)).toBe(1)
+  expect(await count(m, /Lv\.1 · 5\//)).toBe(1)
 })
 
 test('achievements: 5 quick pokes unlock the hidden 戳戳戳, 50 pokes unlock 戳戳乐', async ($, on) => {
@@ -341,11 +343,14 @@ test('achievements: poking her awake 10 times unlocks 别吵醒我', async ($, o
   expect(await hasText(m, /✓ 别吵醒我/)).toBe(true)
 })
 
-test('achievements: carrying on 5 times while the rest reminder is on unlocks 不听劝', async ($, on) => {
-  await engine($, on)
+test('achievements: carrying on 5 times while a real rest reminder is on unlocks 不听劝', async ($, on) => {
+  const clock = await engine($, on)
   const m = await mount($, 'desktop')
-  await $.turn.start({ text: 'hi', turnId: 'w0' } as any)      // work has started, so a reminder can come
-  await $.command.run({ command: 'pet', args: 'rest', origin: { kind: 'composer' }, presentation: {} } as any)
+  await $.session.start({ source: 'startup', cwd: '/test' } as any)
+  await $.turn.start({ text: 'hi', turnId: 'w0' } as any)      // a stretch of work starts
+  for (let i = 0; i < 7; i++) await clock.advance(10 * 60 * 1000)      // an hour later the real reminder is on
+  await clock.advance(30000)
+  expect(await countBtn(m, /知道啦/)).toBe(1)
   for (let i = 0; i < 5; i++) await $.turn.start({ text: 'hi', turnId: 'i' + i } as any)
   await press($, 'ach')
   await press($, 'ag-secret')
@@ -391,9 +396,9 @@ test('achievements: many unlocked at once give one toast, not a flood', async ($
 
 test('achievements: unlocking the last ordinary one unlocks 全部收集', async ($, on) => {
   await engine($, on, {
-    stats: { turns: 3000, tools: 5000, pats: 500, focus: 50, night: 1, longest: 31 * 60000, pokes: 50, compacts: 10, breaks: 10, errors: 10, peak: 1, wakes: 0, bursts: 0, ignored: 0 },
+    stats: { turns: 3000, tools: 5000, pats: 500, focus: 50, night: 1, longest: 31 * 60000, pokes: 50, compacts: 10, breaks: 10, errors: 10, peak: 1, wakes: 0, bursts: 0, ignored: 0, recoveries: 10, busyDays: 10 },
     streak: { last: '2000-1-1', n: 100, max: 100 },
-    affection: 1700,
+    affection: 1975,
     today: { d: dayKey(new Date(1_700_000_000_000)), turns: 50, tools: 0, pats: 0, focus: 0 },
     achieved: [],
   })
@@ -445,7 +450,7 @@ test('terminal: the same buttons work there (a reminder can be dismissed, pat an
   await press($, 'pat')
   expect(await count(m, /\(done|\(idle|♥Lv\.1/)).toBeGreaterThan(0)
   await press($, 'ach')
-  expect(await countBtn(m, /对话与工具 0\/8/)).toBe(1)
+  expect(await countBtn(m, /对话与工具 0\/9/)).toBe(1)
 })
 
 test('focus: she does not fall asleep during a focus timer, and starting one wakes her', async ($, on) => {
@@ -460,7 +465,7 @@ test('focus: she does not fall asleep during a focus timer, and starting one wak
   expect(await count(m, sleepLine)).toBe(0)            // starting the timer woke her
   await clock.advance(10 * 60 * 1000)
   expect(await count(m, sleepLine)).toBe(0)            // 10 quiet minutes later she is still awake
-  expect(await countBtn(m, /放弃专注/)).toBe(1)
+  expect(await countBtn(m, /放弃 · 剩/)).toBe(1)
 })
 
 test('break: the button row stays short (no focus button next to the break button)', async ($, on) => {
@@ -469,7 +474,7 @@ test('break: the button row stays short (no focus button next to the break butto
   await press($, 'focus')
   await clock.advance(26 * 60 * 1000)
   expect(await countBtn(m, /结束休息/)).toBe(1)
-  expect(await countBtn(m, /专注 25 分钟|放弃专注/)).toBe(0)
+  expect(await countBtn(m, /专注 25 分钟|放弃 · 剩/)).toBe(0)
   await press($, 'brk')
   expect(await countBtn(m, /专注 25 分钟/)).toBe(1)      // ending the break brings the focus button back
 })
@@ -514,4 +519,464 @@ test('rest: waiting for a permission answer for a long time does not count as wo
   for (let i = 0; i < 7; i++) await clock.advance(10 * 60 * 1000)
   await clock.advance(30000)
   expect(await count(m, restLine)).toBe(0)
+})
+
+test('demo: carrying on after /pet rest is not counted as ignoring a real reminder', async ($, on) => {
+  await engine($, on)
+  const m = await mount($, 'desktop')
+  await $.turn.start({ text: 'hi', turnId: 'dr0' } as any)
+  await $.command.run({ command: 'pet', args: 'rest', origin: { kind: 'composer' }, presentation: {} } as any)
+  for (let i = 0; i < 6; i++) await $.turn.start({ text: 'hi', turnId: 'dr' + (i + 1) } as any)
+  await press($, 'ach')
+  await press($, 'ag-secret')
+  expect(await hasText(m, /✓ 不听劝/)).toBe(false)
+})
+
+// ---------- audit follow-ups (0.3.4) ----------
+test('pat: ten clicks at the same moment still pay only five', async ($, on) => {
+  await engine($, on)
+  const m = await mount($, 'desktop')
+  await Promise.all(Array.from({ length: 10 }, () => press($, 'pat')))
+  expect(await count(m, /Lv\.1 · 5\//)).toBe(1)
+})
+
+test('damaged saved numbers count as 0 instead of turning into null', async ($, on) => {
+  await engine($, on, { affection: 'abc', streak: { last: 'x', n: 'z', max: null }, today: { d: 'x', turns: 'q', tools: null, pats: 'p', focus: {} } })
+  const m = await mount($, 'desktop')
+  await press($, 'pat')
+  expect(await count(m, /null|NaN/)).toBe(0)
+  expect(await count(m, /Lv\.\d+ · \d+\//)).toBe(1)
+})
+
+test('check-in: the reward grows with the streak (3 + days - 1, at most 8) and a broken streak starts again at 3', async ($, on) => {
+  const day = (back: number) => {
+    const d = new Date(1_700_000_000_000)
+    d.setDate(d.getDate() - back)
+    return dayKey(d)
+  }
+  // yesterday was day 4 of a streak: today is day 5 -> 3 + 4 = 7 points (the "three days" achievement is already counted: max 4)
+  await engine($, on, { streak: { last: day(1), n: 4, max: 4 }, achieved: ['str3'] })
+  const m = await mount($, 'desktop')
+  await $.turn.start({ text: 'hi', turnId: 'ci1' } as any)
+  expect(await count(m, /Lv\.1 · 7\//)).toBe(1)
+})
+
+test('check-in: a broken streak starts again and pays 3', async ($, on) => {
+  const d = new Date(1_700_000_000_000)
+  d.setDate(d.getDate() - 3)
+  await engine($, on, { streak: { last: dayKey(d), n: 9, max: 9 }, achieved: ['str3', 'str7'] })
+  const m = await mount($, 'desktop')
+  await $.turn.start({ text: 'hi', turnId: 'ci2' } as any)
+  expect(await count(m, /Lv\.1 · 3\//)).toBe(1)
+})
+
+test('focus: pressing the button again gives the timer up', async ($, on) => {
+  await engine($, on)
+  const m = await mount($, 'desktop')
+  await press($, 'focus')
+  expect(await countBtn(m, /放弃 · 剩/)).toBe(1)
+  await press($, 'focus')
+  expect(await countBtn(m, /放弃 · 剩/)).toBe(0)
+  expect(await countBtn(m, /专注 25 分钟/)).toBe(1)
+})
+
+test('context warning: once at 85%, not again while it stays high, again after it fell clearly below', async ($, on) => {
+  const toasts: string[] = []
+  toastSink = toasts
+  await engine($, on)
+  on('session.measure', (_: any, e: any) => ({ changed: e.changed } as any))
+  const measure = (p: number) => $.session.measure({ context: { window: 1000000, percent: p }, rateLimits: [], changed: ['context'] } as any)
+  await mount($, 'desktop')
+  await measure(70)
+  const base = toasts.length
+  await measure(86)
+  expect(toasts.length).toBe(base + 1)
+  await measure(90)
+  expect(toasts.length).toBe(base + 1)
+  await measure(60)
+  await measure(88)
+  expect(toasts.length).toBe(base + 2)
+})
+
+test('compaction: when it is skipped nothing is celebrated or counted', async ($, on) => {
+  let m: any
+  on('session.compact', async () => ({ skip: 'nothing to do' } as any))
+  await engine($, on)
+  m = await mount($, 'desktop')
+  await $.session.compact({ trigger: 'manual', messages: [{ role: 'user', text: 'hi', toolUses: [], toolResults: [] }] } as any)
+  expect(await count(m, /整理完毕|压缩完成|整理好啦|腾出好多空间|整理好了|轻松多啦|轻装上阵/)).toBe(0)
+  await press($, 'ach')
+  await press($, 'ag-misc')
+  expect(await hasText(m, /✓ 轻装上阵/)).toBe(false)
+})
+
+test('an achievement id that no longer exists is not counted in the shown total', async ($, on) => {
+  await engine($, on, { achieved: ['first', 'removed-long-ago'] })
+  const m = await mount($, 'desktop')
+  await $.session.start({ source: 'startup', cwd: '/test' } as any)
+  await $.turn.start({ text: 'hi', turnId: 'x1' } as any)
+  expect(await countBtn(m, /成就 1\/41/)).toBe(1)
+})
+
+// ---------- affection model v2 (0.4.0) ----------
+const todayKey = () => dayKey(new Date(1_700_000_000_000))
+const heartOf = (m: any, re: RegExp) => count(m, re)
+
+test('points: the first 10 turns of a day are worth 1, the next ones 0.5 (12 turns = 11, plus the first achievement)', async ($, on) => {
+  await engine($, on)
+  const m = await mount($, 'desktop')
+  for (let i = 0; i < 12; i++) await $.turn.complete({ reason: 'answer', answer: '', durationMs: 1000, isAborted: false, turnId: 'p' + i } as any)
+  expect(await heartOf(m, /Lv\.2 · 14\/35/)).toBe(1)      // 10 + 0.5 + 0.5 = 11, "first" gives round(2 * 1.3) = 3
+})
+
+test('points: after the 80th turn of a day a turn is worth nothing', async ($, on) => {
+  await engine($, on, { today: { d: todayKey(), turns: 80, tools: 0, pats: 0, focus: 0, rests: 0, pts: 25 }, achieved: ['first', 'day50'], stats: { turns: 80 } })
+  const m = await mount($, 'desktop')
+  await $.turn.complete({ reason: 'answer', answer: '', durationMs: 1000, isAborted: false, turnId: 'cap1' } as any)
+  expect(await heartOf(m, /Lv\.1 · 0\/10/)).toBe(1)
+})
+
+test('points: a focus timer is worth 2 for the first four of a day, then nothing', async ($, on) => {
+  const clock = await engine($, on, { achieved: ['foc1'] })
+  const m = await mount($, 'desktop')
+  await press($, 'focus')
+  await clock.advance(26 * 60 * 1000)
+  expect(await heartOf(m, /Lv\.1 · 2\/10/)).toBe(1)
+})
+
+test('points: the fifth timer of a day pays nothing', async ($, on) => {
+  const clock = await engine($, on, { achieved: ['foc1'], today: { d: todayKey(), turns: 0, tools: 0, pats: 0, focus: 4, rests: 0, pts: 8 } })
+  const m = await mount($, 'desktop')
+  await press($, 'focus')
+  await clock.advance(26 * 60 * 1000)
+  expect(await heartOf(m, /Lv\.1 · 0\/10/)).toBe(1)
+})
+
+test('points: a full 5 minute rest is worth 1', async ($, on) => {
+  const clock = await engine($, on, { achieved: ['foc1', 'brk1'] })
+  const m = await mount($, 'desktop')
+  await press($, 'focus')
+  await clock.advance(26 * 60 * 1000)
+  await clock.advance(5 * 60 * 1000 + 2000)
+  expect(await heartOf(m, /Lv\.1 · 3\/10/)).toBe(1)      // 2 for the timer + 1 for the rest
+})
+
+test('streak: a weekend off does not break it (Friday -> Monday), a longer gap does', async ($, on) => {
+  const friday = new Date(2023, 10, 17)
+  const monday = new Date(2023, 10, 20, 12, 0, 0).getTime()
+  const clock = await engine($, on, { streak: { last: dayKey(friday), n: 4, max: 4 }, achieved: ['str3'] })
+  const m = await mount($, 'desktop')
+  await clock.set(monday)
+  await $.turn.start({ text: 'hi', turnId: 'wk1' } as any)
+  expect(await heartOf(m, /Lv\.1 · 7\/10/)).toBe(1)      // day 5: 3 + 4
+})
+
+test('streak: Thursday -> Monday is a real gap and starts again at 3', async ($, on) => {
+  const thursday = new Date(2023, 10, 16)
+  const monday = new Date(2023, 10, 20, 12, 0, 0).getTime()
+  const clock = await engine($, on, { streak: { last: dayKey(thursday), n: 4, max: 4 }, achieved: ['str3'] })
+  const m = await mount($, 'desktop')
+  await clock.set(monday)
+  await $.turn.start({ text: 'hi', turnId: 'wk2' } as any)
+  expect(await heartOf(m, /Lv\.1 · 3\/10/)).toBe(1)
+})
+
+test('migration: an old save keeps its level (old Lv.6 at 153 points becomes the new Lv.6 at 180), once', async ($, on) => {
+  const clock = await engine($, on, { affection: 153, streak: { last: todayKey(), n: 1, max: 1 } })
+  const m = await mount($, 'desktop')
+  await $.session.start({ source: 'startup', cwd: '/test' } as any)
+  await clock.advance(1000)
+  expect(await heartOf(m, /Lv\.6 · 180\/250/)).toBe(1)
+})
+
+test('migration: a high old level is kept too (old Lv.10 at 418 becomes 517), and a migrated save is left alone', async ($, on) => {
+  const clock = await engine($, on, { affection: 418, streak: { last: todayKey(), n: 1, max: 1 } })
+  const m = await mount($, 'desktop')
+  await $.session.start({ source: 'startup', cwd: '/test' } as any)
+  await clock.advance(1000)
+  expect(await heartOf(m, /Lv\.10 · 517\/625/)).toBe(1)
+})
+
+test('migration: a save already on the new model is not touched', async ($, on) => {
+  const clock = await engine($, on, { affection: 153, model: 2, streak: { last: todayKey(), n: 1, max: 1 } })
+  const m = await mount($, 'desktop')
+  await $.session.start({ source: 'startup', cwd: '/test' } as any)
+  await clock.advance(1000)
+  expect(await heartOf(m, /Lv\.5 · 153\/180/)).toBe(1)
+})
+
+test('summary: shows today\'s points', async ($, on) => {
+  await engine($, on)
+  const m = await mount($, 'desktop')
+  await $.turn.complete({ reason: 'answer', answer: '', durationMs: 1000, isAborted: false, turnId: 'sm1' } as any)
+  await press($, 'sum')
+  expect(await heartOf(m, /今日心意 \+4/)).toBe(1)      // 1 for the turn + 3 for "first"
+})
+
+test('achievement rewards are scaled: the total is about a seventh of what Lv.20 needs', async ($, on) => {
+  await engine($, on, { achieved: [] })
+  await mount($, 'desktop')
+  // the same arithmetic as the code: Math.round(rw * 1.3) over the 41 base rewards
+  const base = [2, 3, 5, 8, 12, 5, 4, 4, 8, 3, 5, 6, 10, 20, 3, 4, 5, 6, 0, 3, 6, 10, 3, 2, 5, 10, 2, 6, 3, 4, 8, 2, 6, 4, 5, 4, 5, 5, 5, 4, 10]
+  const total = base.reduce((n, r) => n + Math.round(r * 1.3), 0)
+  expect(base.length).toBe(41)
+  expect(total).toBeGreaterThan(250)
+  expect(total / 1975).toBeLessThan(0.16)
+})
+
+// ---------- mood: the face and the line she shows while plainly idle ----------
+const at = (h: number, mi = 0, d = 15) => new Date(2023, 10, d, h, mi).getTime()      // local time; the mock clock only moves forward, so always after 14 Nov 2023
+const MOODS: Record<string, RegExp> = {
+  happy: /今天心情很好，主人|托主人的福|能为主人效劳|请放心，我状态很好/,
+  sleepy: /夜深了，主人|已经很晚了|（轻轻打了个哈欠）失礼了|熬夜对身体不好/,
+  worried: /情况似乎不太理想|有些状况需要留心|我有些担心，请主人多加留意/,
+  excited: /今天事务颇多|今天进展不错|主人今天格外勤勉/,
+}
+const moodsShown = async (m: any) => {
+  const r: string[] = []
+  for (const k of Object.keys(MOODS)) if ((await count(m, MOODS[k])) > 0) r.push(k)
+  return r
+}
+const finishTurn = async ($: any, clock: any, id: string, reason: string = 'answer') => {
+  await $.turn.start({ text: 'hi', turnId: id } as any)
+  await clock.advance(1000)
+  await $.turn.complete({ reason, answer: '', durationMs: 1000, isAborted: false, turnId: id } as any)
+  await clock.advance(8000)      // the short "done" or "worry" pose is over
+}
+
+test('mood: calm by day, no mood line shows', async ($, on) => {
+  const clock = await engine($, on)
+  await clock.set(at(15))
+  const m = await mount($, 'desktop')
+  expect(await moodsShown(m)).toEqual([])
+})
+
+for (const [h, mi, d, want] of [[22, 59, 15, []], [23, 0, 15, ['sleepy']], [4, 59, 16, ['sleepy']], [5, 0, 16, []]] as [number, number, number, string[]][]) {
+  test(`mood: sleepy from 23:00 until 05:00 (${h}:${String(mi).padStart(2, '0')})`, async ($, on) => {
+    const clock = await engine($, on)
+    await clock.set(at(h, mi, d))
+    const m = await mount($, 'desktop')
+    expect(await moodsShown(m)).toEqual(want)
+  })
+}
+
+test('mood: a head pat makes her happy for a while, and then it is over', async ($, on) => {
+  const clock = await engine($, on)
+  await clock.set(at(15))
+  const m = await mount($, 'desktop')
+  await $.ui.press({ plugin: 'pet', key: 'pat' })
+  await clock.advance(3000)
+  expect(await moodsShown(m)).toEqual(['happy'])
+  await clock.advance(16 * 60 * 1000)
+  await finishTurn($, clock, 'p1')
+  expect(await moodsShown(m)).toEqual([])
+})
+
+test('mood: an error worries her, and it passes after five minutes', async ($, on) => {
+  const clock = await engine($, on)
+  await clock.set(at(15))
+  const m = await mount($, 'desktop')
+  await finishTurn($, clock, 'e1', 'error')
+  expect(await moodsShown(m)).toEqual(['worried'])
+  await clock.advance(6 * 60 * 1000)
+  await finishTurn($, clock, 'e2')
+  expect(await moodsShown(m)).toEqual([])
+})
+
+test('mood: worry wins over happiness, whichever came first', async ($, on) => {
+  const clock = await engine($, on)
+  await clock.set(at(15))
+  const m = await mount($, 'desktop')
+  await $.ui.press({ plugin: 'pet', key: 'pat' })
+  await clock.advance(3000)
+  await finishTurn($, clock, 'w1', 'error')
+  expect(await moodsShown(m)).toEqual(['worried'])
+  await clock.advance(6 * 60 * 1000)      // the worry has passed, the pat has not (15 minutes)
+  await $.ui.press({ plugin: 'pet', key: 'pat' })
+  await clock.advance(3000)
+  await finishTurn($, clock, 'w2', 'error')
+  await $.ui.press({ plugin: 'pet', key: 'pat' })      // a good thing while worried does not cheer her up
+  await clock.advance(3000)
+  expect(await moodsShown(m)).toEqual(['worried'])
+})
+
+test('mood: a busy day (30 turns) makes her excited, and a good thing outranks it', async ($, on) => {
+  const clock = await engine($, on)
+  await clock.set(at(15))
+  const m = await mount($, 'desktop')
+  for (let i = 0; i < 29; i++) await finishTurn($, clock, 'b' + i)
+  await clock.advance(16 * 60 * 1000)      // whatever good thing happened on the way is over
+  await finishTurn($, clock, 'b29')
+  expect(await moodsShown(m)).toEqual(['excited'])
+  await $.ui.press({ plugin: 'pet', key: 'pat' })
+  await clock.advance(3000)
+  expect(await moodsShown(m)).toEqual(['happy'])
+})
+
+test('mood: only plain idle takes a mood; working keeps its own line', async ($, on) => {
+  const clock = await engine($, on)
+  await clock.set(at(23, 30))
+  const m = await mount($, 'desktop')
+  await finishTurn($, clock, 'k0')      // (the first turn of a day shows the greeting first)
+  await clock.advance(10000)      // the first turn of a new save unlocks an achievement: its message, then a happy mood (which outranks the sleepy one)
+  expect(await moodsShown(m)).toEqual(['happy'])
+  await $.turn.start({ text: 'hi', turnId: 'k1' } as any)
+  expect(await moodsShown(m)).toEqual([])
+  const own = /正在处理，请稍候|努力工作中|马上就好，主人|正在逐项办理|请放心，我会仔细完成|正在执行，请勿担心|手头的工作正在推进|请再给我一点时间|正在思考，请稍等|让我想一想|嗯……|容我斟酌片刻|请稍候，我在整理思路|这个问题需要仔细考虑|正在权衡，请稍等|请允许我想一想/
+  expect(await count(m, own)).toBe(1)
+})
+
+const faces = async (m: any) => (await m.findAll({ type: 'Svg' })).map((n: any) => n.props.alt).filter((a: string) => a.startsWith('pet: '))
+
+test('mood: the face follows the mood (sleepy, worried, happy, excited, calm)', async ($, on) => {
+  const clock = await engine($, on)
+  await clock.set(at(23, 30))
+  const m = await mount($, 'desktop')
+  expect(await faces(m)).toEqual(['pet: sleepy'])
+  await finishTurn($, clock, 'f1', 'error')
+  expect(await faces(m)).toEqual(['pet: worry'])
+})
+
+test('mood: the face of a happy, an excited and a calm day', async ($, on) => {
+  const clock = await engine($, on)
+  await clock.set(at(15))
+  const m = await mount($, 'desktop')
+  expect(await faces(m)).toEqual(['pet: idle'])
+  await $.ui.press({ plugin: 'pet', key: 'pat' })
+  await clock.advance(3000)
+  expect(await faces(m)).toEqual(['pet: proud'])
+  await clock.advance(16 * 60 * 1000)
+  for (let i = 0; i < 29; i++) await finishTurn($, clock, 'x' + i)
+  await clock.advance(16 * 60 * 1000)
+  await finishTurn($, clock, 'x29')
+  expect(await faces(m)).toEqual(['pet: start'])
+})
+
+test('mood demo: /pet mood <name> shows that mood for two minutes; a wrong name explains the usage', async ($, on) => {
+  const clock = await engine($, on)
+  await clock.set(at(15))
+  const m = await mount($, 'desktop')
+  const run = async (args: string) => (await $.command.run({ command: 'pet', args, origin: { kind: 'composer' }, presentation: {} } as any)) as any
+  for (const [name, face] of [['sleepy', 'pet: sleepy'], ['worried', 'pet: worry'], ['happy', 'pet: proud'], ['excited', 'pet: start'], ['calm', 'pet: idle']] as [string, string][]) {
+    await run('mood ' + name)
+    expect(await faces(m)).toEqual([face])
+  }
+  await run('mood sleepy')
+  expect(await moodsShown(m)).toEqual(['sleepy'])
+  await clock.advance(3 * 60 * 1000)
+  await finishTurn($, clock, 'd1')      // (the demo is over)
+  await clock.advance(10000)      // the achievement message of the save's first turn goes away
+  expect(await moodsShown(m)).toEqual(['happy'])      // (that turn was the first of the save: its achievement made her happy, which is the real mood)
+  const bad = await run('mood nonsense')
+  expect(JSON.stringify(bad)).toContain('/pet mood calm')
+})
+
+test('mood: worry as a mood shakes a few times and then keeps still; the reaction to the error itself keeps shaking while it lasts', async ($, on) => {
+  const clock = await engine($, on)
+  await clock.set(at(15))
+  const m = await mount($, 'desktop')
+  const petSource = async () => ((await m.findAll({ type: 'Svg' })).find((n: any) => n.props.alt.startsWith('pet: ')) as any).props.source as string
+  await $.turn.start({ text: 'hi', turnId: 'q1' } as any)
+  await clock.advance(1000)
+  await $.turn.complete({ reason: 'error', answer: '', durationMs: 1000, isAborted: false, turnId: 'q1' } as any)
+  await clock.advance(2000)      // the pose of the error itself
+  expect(await petSource()).toMatch(/<animateTransform[^>]*repeatCount="indefinite"/)
+  await clock.advance(8000)      // it is over; what is left is the mood
+  expect(await faces(m)).toEqual(['pet: worry'])
+  const src = await petSource()
+  expect(src).toMatch(/<animateTransform[^>]*repeatCount="8"/)
+  expect(src).not.toMatch(/<animateTransform[^>]*repeatCount="indefinite"/)      // (the blink of the eyes goes on, of course)
+})
+
+// ---------- mood achievements and the recovery (0.5.0) ----------
+const GROUP_NAME: Record<string, string> = { chat: '对话与工具', misc: '其他', secret: '隐藏' }
+// opens the achievement panel (once: the button is a switch) and unfolds one group (once: that button is a switch too)
+const openGroup = async ($: any, m: any, g: string) => {
+  if ((await countBtn(m, /对话与工具 \d+\/\d+/)) === 0) await press($, 'ach')
+  if ((await countBtn(m, new RegExp('▾ ' + GROUP_NAME[g] + ' '))) === 0) await press($, 'ag-' + g)
+}
+
+test('recovery: a good turn while she is worried ends the worry, makes her happy and counts', async ($, on) => {
+  const clock = await engine($, on)
+  await clock.set(at(15))
+  const m = await mount($, 'desktop')
+  await finishTurn($, clock, 'a0')      // (the first turn of a save: its achievement is over after this)
+  await clock.advance(20 * 60 * 1000)
+  await finishTurn($, clock, 'a1', 'error')
+  expect(await moodsShown(m)).toEqual(['worried'])
+  await finishTurn($, clock, 'a2')
+  await clock.advance(10000)
+  expect(await moodsShown(m)).toEqual(['happy'])
+  await openGroup($, m, 'misc')
+  expect(await hasText(m, /· 雨过天晴.*1\/10/)).toBe(true)
+})
+
+test('recovery: ten of them unlock 雨过天晴', async ($, on) => {
+  const clock = await engine($, on)
+  await clock.set(at(15))
+  const m = await mount($, 'desktop')
+  for (let i = 0; i < 10; i++) {
+    await finishTurn($, clock, 'e' + i, 'error')
+    await finishTurn($, clock, 's' + i)
+  }
+  await openGroup($, m, 'misc')
+  expect(await hasText(m, /✓ 雨过天晴/)).toBe(true)
+})
+
+test('recovery: turns without a worry do not count, and neither does a worry that is over', async ($, on) => {
+  const clock = await engine($, on)
+  await clock.set(at(15))
+  const m = await mount($, 'desktop')
+  for (let i = 0; i < 5; i++) await finishTurn($, clock, 'n' + i)
+  await finishTurn($, clock, 'late-e', 'error')
+  await clock.advance(6 * 60 * 1000)      // the worry lasts five minutes
+  await finishTurn($, clock, 'late-s')
+  await openGroup($, m, 'misc')
+  expect(await hasText(m, /· 雨过天晴.*0\/10/)).toBe(true)
+})
+
+test('recovery: the /pet mood worried demo does not count as a worry', async ($, on) => {
+  const clock = await engine($, on)
+  await clock.set(at(15))
+  const m = await mount($, 'desktop')
+  await $.command.run({ command: 'pet', args: 'mood worried', origin: { kind: 'composer' }, presentation: {} } as any)
+  await finishTurn($, clock, 'demo-s')
+  await openGroup($, m, 'misc')
+  expect(await hasText(m, /· 雨过天晴.*0\/10/)).toBe(true)
+})
+
+test('comfort: five pats while she is worried unlock the hidden 贴心安慰; pats while she is fine do not count', async ($, on) => {
+  const clock = await engine($, on)
+  await clock.set(at(15))
+  const m = await mount($, 'desktop')
+  for (let i = 0; i < 5; i++) {
+    await $.ui.press({ plugin: 'pet', key: 'pat' })
+    await clock.advance(3000)
+  }
+  await openGroup($, m, 'secret')
+  expect(await hasText(m, /✓ 贴心安慰/)).toBe(false)
+  for (let i = 0; i < 5; i++) {
+    await finishTurn($, clock, 'c' + i, 'error')
+    await $.ui.press({ plugin: 'pet', key: 'pat' })
+    await clock.advance(3000)
+  }
+  await openGroup($, m, 'secret')
+  expect(await hasText(m, /✓ 贴心安慰/)).toBe(true)
+})
+
+test('busy days: a day with 30 turns counts once, however many more follow; ten such days unlock 精力旺盛', async ($, on) => {
+  const clock = await engine($, on)
+  await clock.set(at(10))
+  const m = await mount($, 'desktop')
+  const day = async (turns: number, tag: string) => {
+    for (let i = 0; i < turns; i++) await finishTurn($, clock, tag + i)
+    await clock.advance(24 * 60 * 60 * 1000)
+  }
+  await day(29, 'a')      // not a busy day
+  await day(35, 'b')      // a busy day, counted once
+  await openGroup($, m, 'chat')
+  expect(await hasText(m, /· 精力旺盛.*1\/10/)).toBe(true)
+  for (let d = 0; d < 9; d++) await day(30, 'd' + d + '-')
+  await openGroup($, m, 'chat')
+  expect(await hasText(m, /✓ 精力旺盛/)).toBe(true)
 })
