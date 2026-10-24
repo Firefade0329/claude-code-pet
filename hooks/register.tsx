@@ -75,6 +75,7 @@ const warnKind = atom({ plugin: 'pet', key: 'warnKind' } as const, '' as '' | '5
 const warnUntil = atom({ plugin: 'pet', key: 'warnUntil' } as const, 0)
 const moodKind = atom({ plugin: 'pet', key: 'moodKind' } as const, '' as '' | 'calm' | 'happy' | 'sleepy' | 'worried' | 'excited')      // a good or a bad thing happened lately (not saved: a mood is short-lived); the others only come from the /pet mood demo
 const moodUntil = atom({ plugin: 'pet', key: 'moodUntil' } as const, 0)
+const moodComforted = atom({ plugin: 'pet', key: 'moodComforted' } as const, false)      // the current worry has been comforted already (a pat counts once per worry)
 const tick = atom({ plugin: 'pet', key: 'tick' } as const, 0)         // bumped once a minute so the countdowns move
 
 const SLEEP_AFTER_MS = 5 * 60 * 1000
@@ -120,7 +121,7 @@ const LONG_TOAST_MS = 10000            // how long the long-task, rest-reminder 
 const REST_AFTER_MS = 60 * 60 * 1000      // "you have been working for an hour"
 const WORK_GAP_MS = 15 * 60 * 1000        // a break this long starts a new stretch of work
 const FOCUS_MS = 25 * 60 * 1000
-const BUILD_INFO = 'v0.5.0 · built 2026-10-24 16:25'      // filled in by build.py: tells which build a conversation has loaded (/pet version)
+const BUILD_INFO = 'v0.5.1 · built 2026-10-24 17:34'      // filled in by build.py: tells which build a conversation has loaded (/pet version)
 let demoRemind = false      // true while the reminder on screen comes from the /pet rest demo (continuing is not counted)
 let moodDemoUntil = 0      // end time of a mood shown by the /pet mood demo (a demo worry is not a real worry: no recovery, no comfort is counted)
 let demoBreakEnd = 0      // end time of a break started by the /pet break demo
@@ -139,7 +140,7 @@ const FOCUS_PAID_PER_DAY = 4
 const REST_PAID_PER_DAY = 4
 const REWARD_SCALE = 1.3      // achievement rewards, scaled to this pace so that they stay about a seventh of what a full level-up needs
 const emptyToday = (d: string = ''): Today => ({ d, turns: 0, tools: 0, pats: 0, focus: 0, rests: 0, pts: 0 })
-const normToday = (x: any, d: string): Today => ({ d, turns: num(x?.turns), tools: num(x?.tools), pats: num(x?.pats), focus: num(x?.focus), rests: num(x?.rests), pts: num(x?.pts) })
+const normToday = (x: any, d: string): Today => ({ d, turns: Math.max(0, num(x?.turns)), tools: Math.max(0, num(x?.tools)), pats: Math.max(0, num(x?.pats)), focus: Math.max(0, num(x?.focus)), rests: Math.max(0, num(x?.rests)), pts: Math.max(0, num(x?.pts)) })
 const THRESH: number[] = [0, 10, 35, 72, 121, 180, 250, 330, 419, 517, 625, 741, 866, 1000, 1142, 1292, 1451, 1618, 1792, 1975]
 // the thresholds of the versions before 0.4.0: only used to lift old saves to the same level (see migrateModelLocked)
 const OLD_THRESH: number[] = [0]
@@ -366,6 +367,7 @@ async function feel($: any, kind: 'happy' | 'worried') {
     if (kind === 'happy' && cur === 'worried' && now < until) return
     await update($, moodKind, () => kind)
     await update($, moodUntil, () => now + (kind === 'happy' ? HAPPY_MS : WORRIED_MS))
+    if (kind === 'worried') await update($, moodComforted, () => false)
   })
 }
 
@@ -395,8 +397,8 @@ const SUM_KEYS = ['turns', 'tools', 'pats', 'focus', 'night', 'pokes', 'compacts
 const MAX_KEYS = ['longest', 'peak'] as const
 const normStats = (x?: Partial<Stats> | null): Stats => {
   const o: any = {}
-  for (const k of SUM_KEYS) o[k] = Number((x as any)?.[k] ?? 0) || 0
-  for (const k of MAX_KEYS) o[k] = Number((x as any)?.[k] ?? 0) || 0
+  for (const k of SUM_KEYS) o[k] = Math.max(0, num((x as any)?.[k]))
+  for (const k of MAX_KEYS) o[k] = Math.max(0, num((x as any)?.[k]))
   return o as Stats
 }
 
@@ -714,7 +716,8 @@ async function react($: any, kind: 'pat' | 'poke') {
   await update($, reactToken, () => token)
   if (wasAsleep) await setMode($, 'idle')
   if (kind === 'pat') {
-    const comforting = await reallyWorried($, now)      // (asked before the good feeling below: a pat does not end a worry, but it counts as comfort)
+    const comforting = (await reallyWorried($, now)) && !(await read($, moodComforted))      // (asked before the good feeling below: a pat does not end a worry, but the first one counts as comfort)
+    if (comforting) await update($, moodComforted, () => true)
     await feel($, 'happy')
     // today's pats are counted in the store: another conversation may have used some of the five already
     const counted = await locked(() => takePatLocked($, now))
@@ -881,8 +884,23 @@ const daysBack = (ms: number, n: number) => {
   return dayOf(d.getTime())
 }
 const dayBefore = (ms: number) => daysBack(ms, 1)
-// A weekend off does not break the streak: on a Monday, a last use on the Friday before still counts as the day before.
-const continuesStreak = (last: string, now: number) => last === dayBefore(now) || (new Date(now).getDay() === 1 && last === daysBack(now, 3))
+const weekdayBack = (ms: number, n: number) => {
+  const d = new Date(ms)
+  d.setDate(d.getDate() - n)
+  return d.getDay()
+}
+// The days in between may be skipped when every one of them is a Saturday or a Sunday (so Fri -> Sun, Sat -> Mon and Fri -> Mon all go on, Thu -> Mon does not).
+const continuesStreak = (last: string, now: number) => {
+  for (let k = 1; k <= 3; k++) {
+    if (last !== daysBack(now, k)) continue
+    for (let j = 1; j < k; j++) {
+      const wd = weekdayBack(now, j)
+      if (wd !== 0 && wd !== 6) return false
+    }
+    return true
+  }
+  return false
+}
 
 // `settleMs`: several conversations that start together (the app restarts with a few open) must not all count the same day:
 // each writes a claim, waits that long, and only the one whose claim is still there goes on.
@@ -937,16 +955,24 @@ async function dailyCheck($: any, now: number, settleMs: number = 0): Promise<st
 // level the person had, so nobody drops a level because the thresholds changed.
 async function migrateModelLocked($: any) {
   if (num(await $.store.get('model')) >= 2) return
-  const old = num(await $.store.get('affection'))
+  // Several conversations may start at the same moment and each run this (the lock only works inside one conversation). So the target is always
+  // worked out from the points the save had BEFORE the first migration (`legacyAffection`, written once, before the points are touched), never from
+  // points that were already lifted: a second run then arrives at the same number. Read the points first and the original after: whoever sees
+  // lifted points is sure to see the original too.
+  const cur = num(await $.store.get('affection'))
+  const saved = await $.store.get('legacyAffection')
+  const legacy = typeof saved === 'number' && Number.isFinite(saved) ? saved : cur
+  if (legacy !== saved) await $.store.set('legacyAffection', legacy)
   let oldLevel = 1
-  for (let i = 1; i < OLD_THRESH.length; i++) if (old >= OLD_THRESH[i]) oldLevel = i + 1
-  await $.store.set('affection', Math.max(old, THRESH[oldLevel - 1]))
+  for (let i = 1; i < OLD_THRESH.length; i++) if (legacy >= OLD_THRESH[i]) oldLevel = i + 1
+  const now = num(await $.store.get('affection'))      // (points earned meanwhile are not taken away)
+  await $.store.set('affection', Math.max(now, THRESH[oldLevel - 1]))
   await $.store.set('model', 2)
 }
 
 async function restoreSaved($: any) {
   try {
-    await locked(() => migrateModelLocked($))
+    await quietly(() => locked(() => migrateModelLocked($)))      // (it fails alone: the rest of the restore goes on)
     const a = num(await $.store.get('affection'))
     await update($, affection, () => a)
     const have = (await $.store.get('achieved')) as string[] | undefined
@@ -1396,7 +1422,7 @@ export const register: Register = on => {
         <Text dimColor>{`· 对话 ${gone.turns} 轮，调用工具 ${gone.tools} 次`}</Text>
         <Text dimColor>{`· 番茄钟 ${gone.focus} 个（专注 ${gone.focus * 25} 分钟）　摸摸头 ${gone.pats} 次`}</Text>
         <Text dimColor>{`· 连续使用 ${sk.n} 天（最长 ${sk.max} 天）　好感度 Lv.${lvl}`}</Text>
-        <Text dimColor>{`· 今日心意 +${Math.round(gone.pts * 10) / 10}（对话最多 25，摸头 5，番茄钟 4 个，完整休息 4 次，签到另算）`}</Text>
+        <Text dimColor>{`· 今日心意 +${Math.round(gone.pts * 10) / 10}（每天最多：对话 25，摸头 5，番茄钟 8，完整休息 4，签到另算）`}</Text>
         <Text dimColor>{`· 累计 ${stt.turns} 轮 · ${stt.tools} 工具 · ${stt.focus} 番茄 · 最长一次任务 ${Math.round(stt.longest / 60000)} 分钟`}</Text>
       </Box>
     ) : null
