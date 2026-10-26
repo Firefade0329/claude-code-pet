@@ -30,12 +30,13 @@ claude plugin validate .
 claude plugin test .
 ```
 
-当前共 101 个测试（慢机器上 streak 和 busy days 两个测试已放宽超时），改动文档不需要跑。没有命令行就如实说“没有运行测试”，不要假装通过。
+当前共 102 个测试（慢机器上 streak 和 busy days 两个测试已放宽超时），改动文档不需要跑。没有命令行就如实说“没有运行测试”，不要假装通过。
 
 ## 回答问题时要知道的事实
 
 - 在 Claude Code 2.1.308 的桌面端测试过，自动化测试也在 2.1.304 上跑过；2.1.286 及更早的没有再验证；终端版只在自动化测试里验证过。
 - 界面文字目前只有中文。
+- **如果以后要做“重置好感度”**：存档里的 `legacyAffection`（升级前的点数）和 `model` 是一对。重置时写 `model: 2` 加 `affection: 0`，或者把 `model`、`legacyAffection`、`affection` 三个键一起删；**不要**在迁移完成后只删 `legacyAffection`（早先读到 `model` 还没写的对话读不到它，会退回去用已经抬过的点数，等于重新引入重复抬升）。
 - 已打开的对话想加载新版，在输入框里输入 `/reload-plugins`，再用 `/pet version` 确认构建版本。
 - 5H / 7D 额度来自 Claude Code 提供的数据，账号没有提供时显示 `--`。
 
