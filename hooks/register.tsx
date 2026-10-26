@@ -121,7 +121,7 @@ const LONG_TOAST_MS = 10000            // how long the long-task, rest-reminder 
 const REST_AFTER_MS = 60 * 60 * 1000      // "you have been working for an hour"
 const WORK_GAP_MS = 15 * 60 * 1000        // a break this long starts a new stretch of work
 const FOCUS_MS = 25 * 60 * 1000
-const BUILD_INFO = 'v0.5.1 · built 2026-10-24 17:34'      // filled in by build.py: tells which build a conversation has loaded (/pet version)
+const BUILD_INFO = 'v0.5.2 · built 2026-10-24 18:38'      // filled in by build.py: tells which build a conversation has loaded (/pet version)
 let demoRemind = false      // true while the reminder on screen comes from the /pet rest demo (continuing is not counted)
 let moodDemoUntil = 0      // end time of a mood shown by the /pet mood demo (a demo worry is not a real worry: no recovery, no comfort is counted)
 let demoBreakEnd = 0      // end time of a break started by the /pet break demo
@@ -716,8 +716,13 @@ async function react($: any, kind: 'pat' | 'poke') {
   await update($, reactToken, () => token)
   if (wasAsleep) await setMode($, 'idle')
   if (kind === 'pat') {
-    const comforting = (await reallyWorried($, now)) && !(await read($, moodComforted))      // (asked before the good feeling below: a pat does not end a worry, but the first one counts as comfort)
-    if (comforting) await update($, moodComforted, () => true)
+    // (asked before the good feeling below: a pat does not end a worry, but the first one counts as comfort.)
+    // Check and mark in one step: two pats that arrive together must not both count (the lock holds the second one back until the first has marked).
+    const comforting = await locked(async () => {
+      if (!(await reallyWorried($, now)) || (await read($, moodComforted))) return false
+      await update($, moodComforted, () => true)
+      return true
+    })
     await feel($, 'happy')
     // today's pats are counted in the store: another conversation may have used some of the five already
     const counted = await locked(() => takePatLocked($, now))

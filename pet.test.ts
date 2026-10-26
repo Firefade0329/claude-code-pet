@@ -1109,3 +1109,19 @@ test('mood: the busy day of yesterday does not make her excited today', async ($
   await finishTurn($, clock, 'today2')
   expect(await moodsShown(m)).toEqual([])
 })
+
+test('comfort: two pats that arrive at the same moment count once', async ($, on) => {
+  const clock = await engine($, on, { achieved: [], model: 2, stats: { comforts: 3 } })
+  await clock.set(at(15))
+  const m = await mount($, 'desktop')
+  await finishTurn($, clock, 'cc0', 'error')
+  await Promise.all([$.ui.press({ plugin: 'pet', key: 'pat' }), $.ui.press({ plugin: 'pet', key: 'pat' })])
+  await clock.advance(3000)
+  await openGroup($, m, 'secret')
+  expect(await hasText(m, /✓ 贴心安慰/)).toBe(false)      // 3 + one comfort is 4, not 5
+  await finishTurn($, clock, 'cc1', 'error')
+  await $.ui.press({ plugin: 'pet', key: 'pat' })
+  await clock.advance(3000)
+  await openGroup($, m, 'secret')
+  expect(await hasText(m, /✓ 贴心安慰/)).toBe(true)      // the next worry's comfort makes 5
+})
