@@ -1,7 +1,7 @@
 ﻿import { atom, read, update } from 'claude-code'
 import type { Register } from 'claude-code'
 
-import type { PetMode, ReactKind, Sprite, Stats, Streak, Today } from '../types'
+import type { PetMode, ReactKind, Sprite, Stats, Streak, Today, WorkKind } from '../types'
 
 // ---- sprites: assets/<pose>.webp next to this plugin, read on first use (keeps the module small and quick to load) ----
 const spriteCache: Record<string, string> = {}
@@ -32,6 +32,10 @@ const BLINK: Partial<Record<Sprite, { b: string; box: number[] }>> = {
   worry: { b: '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', box: [64.74, 64.04, 64.21, 26.67] },
   compact: { b: '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', box: [64.21, 65.96, 64.56, 25.96] },
   sleepy: { b: 'UklGRqwIAABXRUJQVlA4IKAIAABQJQCdASp3ADMAPlEgjUSjoiEUi47wOAUEsgBiTNp/JfyA6uzC/d+Vb+59ift9Ju3t8xv4geyl+QHuY84zqN/Rd8uT9nfhI/uf/D9Le8Ivzvh/42/UHtjzEXmPth+e/sf0zdAvAC/GP5V/lPy74VPnH82/x/3Ac73be8dB5n7AH80/uP/R/ID3x/93y9fmf+E/4X+I+AX+Uf0r/Xf2r2mfZT+znszfsAL3OwJXLcf6EayCETnu3P3fp0FVjODSZ7lUVCjD8Ag7RbW5RtJ1gUDsoGB9NN4fDrz5eTvIMUySKXIi7WJBlesCUSR30DlmHXzdNyedW8BNbVQErZ7uvU9rmf7LKM6KiF0TYDGyWRlxAvInPIzQkDjotgEmDeTpraaYPSS9ph5PaS8DPu03FZ39pFiAAP3Q5GIErEFp/9szND21nF59iroI85An3vMR1N4N40TDH6MCo/1bgRgAapz8GJt5x1r2de3bYnavC8PDm3/2lm/ByF1+ZbRRDTyJQ+c5ERLgGr69S0JMHCcst/qXl+66J+Y81TNP0UrX2yKKZMt6PS72Nwke37W2phQPd6czhfqKbxHwIJCzQKEaOtk4E0VzTFObjNpGmyrpOztvnVlFDBc8ueG9c1omSOL/FRJdD3FGO7xlmDonrreOCmjoiSXQbJsvguVs+K5FbyeSwZeiyEB4xKj23HEcFoqzfzD7l6nfVGRUWwh2778osS1cePqZL716C4n/DtsTmNxrzAD4N/P0h781cfkF9k6ppD/AELsO7uiks1e6s9aN6yDLXhmIaW2fAYR9yy3+9lX4emncnK+X4dvuOJZUfC4ImT2fR3B5TGgjA5avKRxGVN68K0PwRb16SkNr5V4cZZtLycYQWs1+zgxxvxZdN4xgR/gk21XQBhsyx5Ho/10aTzt5SVrSlEHx87tpzpq1rPyf+OyyJvteVbnfBpfOP+pn2Kna3mK/71EGgHBZ88ORWtJXWT7avDREPDH+9Yvf3QIfivqKnUdi3KemO18KOjvGLv2Ko/LmD1XRfiYCxykOkmPK3WPFgZhwn6iGc7IqtU/1Zh2la/Lcn+Gq/3aDYk9B40no94yQwMKt8cwQNS08/85/L+/0Npv8lITqTZxJ+IO1YrQKg7Bku0b/sQOShjum8qf8hwl0Q3bhY8/3GU+Busiv8lud4aU9L4Dx8hIz48cIFBcUlBjAXlMCVyTjPb75sNi3S5AHawovEzjNwTEHYMlWFwkMw1OHmaIcGYjSDTKXvcCajm53agGPGCq0rAKxcxYa2IMdXn9DNGcqlNTS8PTRojFGWCUagdQagYWFwmcHfAZAds09UPvVz0benKIO08mVxyySUv2MKsg4a4fugHgXV+OD35SY054gSRNdIoKvN23+mKIpHMJD+knPC9ZSsqDDpmbHdQPGnabSXA7xGtbmjR/+4WrmislwoeMLCn4ZPWb/aiDt+BHE4dLyXVzc5aQ7NTFqg0gpBUeU4V/HxfqBsNBuQireptuTFYllVIqecXyBPup0FtzfctLE3nTjWc19yf8yrF8BIbiUvo9d1H3qPW9fiXVmgWbxgtLN8swAehtQ/IQ/Qa9mB+tvV4R8yyx3QKqf/pub8T5H5GJjSgBZFHZ0iMBLlMot8eEdC+Cgf845Y+5G3vBp2FhqLz1fvCbeLzngfoLVGePE6TWrfupq168f8i6VqutUcGOOeg3wq9jt2hJUv7xJrOys1+FqJsCZ+NUxJsZ9IdqO/k2L8kDaFSZKvMYuWnEcJi6jV8GiokdYBIng5YgXCJSBYdt2mMjmvGlNriKpbcGSxpR3/GOF0JqpclP4uwFP1t88nepqgTNptX9jOOWx0wcXviSju/v7oL/RwmghIfL6SaX0riML8BT3VtQKVTMFej3VtU+JpI6rxEMJtfELJIs6xUWZbT4eltlprrDOXVO64W25LESYOKTrFIE3fXlkLsbV3XJBUrxD8TeBbjt+hbJpFz6KbtxcowTByg4l1VIPUu0eN9TSD1ulmjlGywX6oUgoKgMqDOl+zrnjR/rsF5LhUBC5IqA3a2gX0uTi44GRCUbrclTXuUS/YtQE0FL2sUm/jNygW+TcPQwl/ZJD5i8LuEb7yR2NneNBt2jZMeYjqrGoOxejmDlQy/ttb0577h/X81emiJqVpbOzebvdDsuk3/2cFR8aIeMaY+/qtD+MvOt71Z6VyjkKvzoSW8uVTK1JJADnzF3NrAOGxycKoZNOke9UUqSfYGdNFNLErfwQwCb0Or2fCltnqUVqdEP5y5TvaaZuQpyTHNR+Hp+eAIb2lYhF+M+j+9CLwfrVGGTZ123PmAvz6NBLCiGifzv8RBwlMCG4CD9mfldbUKtyDokmGAHaPxjzz4f52/ZNDdSnYk0aC3rvb2iznXtI37lDpvp+eu9lTiae6STpJndQR5h2cMw/c7cGkQUhmVar523IglqE/8YZkCbNWUBHNPyAfMDpb3t5JX76lKCoJWr3AzdPwjpxcFzEbvaQleODnuVr3KiqgdFDPJVLcDzP3GiZKrnFYP3nlnocLtZvGgaMWOdtcdPI8BnzL/mLJi+RlkiML+BM00pLs944QXa+DetVrO59EOgMbLIhotbqb1wfSXhtZ4xTUyHEqflOjtj0IwIkOHHUdMTPXUotxVdWuUCBp6Wq44TNgZCC9Pj5SG5Xy4Yk/ePdH2gTwSpfDqGSxYBi6eeGRMLhYTgNoJ64+t/JM0Qzm+QIpcKXV0JSYnwHY56ys4q2HOdxlh55bcSNnq+QfkOiW9GkKuQqd/jTTcJSNgi0GXDSsbHfvSkvISDSPXqoC5GrLs4iqlsRVbDhK1cFV7/rXIB9g8iv5j/3VDYR2FdSW44dJrei7/QTaRbF6f4BSezlydmV4BhrTyRxV2pOoQ+ZblQKq1sZn6R1o+VOh6v3Vt9SctO3zuo9Rf2fAEgyMrIBQAA=', box: [67.02, 67.89, 59.47, 25.26] },
+  read: { b: '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', box: [64.39, 62.98, 63.86, 27.72] },
+  search: { b: 'UklGRpIKAABXRUJQVlA4IIYKAADwKwCdASp9ADoAPlEgjUSjoaEXCk4AOAUEtABVhu0/VfwA5+qrXi/x69pC2f5XiiTkdvk9rzBv8B0MPMB5UP7Ae639gPYA6SL9t/Yd/Zz05/Zn/dKxKPxPhn4uPP/uHoG/yX7kfif7N+4fKTwAvXf+B3zWYr1Du5n+R/NH+0c6n2D9gD9UP9L+Z3rIeH3539AH2C/zf+7/7v7jvi7/0v9R+a3t0+eP+f/fPgJ/l/9U/23+A/IT5rvZb+2fsv/sGP+siLJRidFRjgFiFDAUeQv4HpE5bcbOSydFszgXZ0exLupBfo6UXoJrAax0uU/MSe/aPFpxv/k8AluJIuyNBT7R87Bt+y/FKjsNB3lt8QGLnA0p1k3IXEG/YjFF9aIxYsUSeUn8LWXudMrLYlZ9uqeOMRBGo2r4YWq7y0J7W6KhzTsviUM9EKqT6jBJ8OQa0x+2XBrauKvJefItMMZX5cQhRBUfIYyBOwAA31RSReR8y0A7BsnUGFPdUdYEeQUu+KELO6kBZXv8AN1kqaaw3ySzGEXohMCuxmZM3eN486kL62SvjCB9cGc34tobLVezppX8Z+PDr8DK6bT9TTYDGhmzH6XIno6l/uidL/YPWF4ectnS4hpbwWfBMPtTFO2PGDhgUPLjK1+wVXnMvqWDmQghDwuAcAnJ9LlSgJ+JTmLmi6QtCxZkw/YQilPg/cK1Z41fWWL1v6kuN9JJcudfIx0bC7QI4Dhii2JrulClSNPAcSkm7rPi3m1GD5TPOio1zYIoyuOaDxMhxhWH3fEtXj4kFOinOCyguo5WOxubSlW/iWX/PnXRsQj7VrsSTKmoC4+nxMc8SE6fK28Ah/Ar43Gl85OGbXMxkMlM6xcYJk/n3M5zbUueqeszAkg2t1+z0rrFt2CJNkPly8X6iPTNr+XhdRjfV8Umh6d3/Sfj/ifi5bE3Pu6pgyPqPoF6exnfa1DG77plYnuPhnP5ioGLSPgbcnBTQPu/uU4069uX4ip6ixjmGTq5xY01Yn7GTTZzbiJmoZSrc0XN8W1HizhSuIUxbo0D5SITbM1pCqrBGgHm3GT/Or+fJS9UDRAFg8k4uhQJfAOL680SkOBr9/wxMxW/5k5+AfgPvINSXm/sSQFERTDVu9vX3AP8ctE6jt7elEU0dHGhfRuol1EPPgbgB7CDvhuLYuFfz8YlufEpaIfo9gUKm1b8buEcFczmGjvUsnk3LhJxMF3LTYNq03RP2kEWEkk1SpfDPT3wFp/BpY5Q3fQHy8zMnwR1eIiRGOF7flT67eFlKHjpmsirbT+HcvjKGTOP/iGx253iOpK+rxdXYY8dQP88AXBLVgmXKhXrrPUSk9Br+rk0/fCbqw1t7Sp04+IhlRojOLOT5vn6K0IJB46Da56xMW51+PK5tpr6RtGc5+xNl9r3Mj96hhoneUB3AG6qRV2HtBd4bIQznySvpD0ewBYjDyjnhH4/UtVZL50a4zyj9vSGqOzpSeNyFwQWMBNj/RaAeq569v/0O5c1xuvCl++uB+n0V+dNH/jTWNKbMlj1xkNVcYhhP/i/VDF6rzCvuhv9CHtvkl/hsUqdfZJBC2EaeNwxuT7jprLckccfsW+JUzGJAVsIE37M3N0NmbUDMCpocU8mYDw4l/HfARyrmHKvRKbB19/oLC/kv0I4ZozNBFlMgKSYcQPtLpGL6qmdai/EXGmSpSiDzLGx9S+B8ks6vY/OB/UD7FW1s37f9k7Np5J1uKULr77+psGf/m407SKCz+5LHNXkURvt8zaW36f5dUR93qfaphkLH92DQv+H9AViX0vpbdq6BEnzn5yP8erDm4PQ1AGzn3wY9/4VvJJbG/8KEe0k/mjKJfuP3Q2uHfn/8KA7cqf+wlFSuggvJbyT5VpcTToPp3hRFFdS5MYUgfdr1nMB8EOkTxiaBUSUXpXumur2SEv3KyAMv/JG+6Dq8s+iVUT1zJQR9v2TDHBkvv233jb9gTkTZoUJynVRKgsTIJGUCDE6SJOkXfnntC85MErsfguZHIBjRPBCTNGJr6kNPIews6VTN86WqvZI5Lh9PQPLXI2SuoghiCMMi4xQ3pPv3zvMBpTPprSQo+f/mg9c34cIZngnpLhEzNctw4+JfuZbddUzK2E/SQltB18P6iMu+wC7p5CxjKWue9/yrOU/0tCD84xuu/EAIis/T9XSc2xVir09RdVw8ooZMobctYpDcd73rZ1yx3efJl+r4hj2LO9c6QmE1a2coS5Qr3dBiv1V7hA52OpfkqtMb3g96F/xvJqGKiI2C+NpLXg2O4i39FN6jFc/6xzlc2d/KL3bFPc7Q96JpH2TS+YgArY56Bbh+y/yFEe31eWpZeCxJwo/CL/28ecFBATbhroJnAqELJLLKGk9zudXeedORJuYl4+InbUtA6gt9HU7s7Er/gxS5pkznKkbHfF4utDeehMCHuf6jSTa2wT6Q/QDug4xkqoD2nF8po9+61hhoyxnupaz3K1oUtSjSpcNL6Pp/J4rGbr5qU7YVjy7QU4jj1FpyIX1cfoUbqYdxR+f6QAbyP5Yo0PsUp2MNpQgUwEKz8ydox6LCWjQcgLzXZ34INTHerE6E61W0Z0/DDD0fz2qcWNCA5mAbMqETLLbnZZKJMA09iKKbdRnwDiEvl+LKfNAXqkSwvCGDXJSZwVCntXZxwqsJbRcKcwIMCvJqiKaC/XjoavYBByFMzD/87pVX/O/+U/OofkerJspgwHR5jezhUt8moMQNDK6QpkQY47VFyS2W+RMAUor0sbKzLpNxpwh74hXlQgmQ3BbrjbUtBKqSwekf+wN+jteaChWLDgDJM4R0ey5Z50K2elY5LdVXjSX/AyQWTX8dCrr2E7UpIo4lYFy3ZSxp8KIDaNRFv4tYqexWwgZee0+qKOkAL067h+eF7CjIMCApoOQc80AgsMcpqIc+q5/N80MQONKkx5pwVwyXGfHrMSZ7mFzD+8vgBtffK3yY0ki8hgWR+m2v/s8Qb89lEgsdJ6PPNy7qWpxpHtbPm01833e3nA1wXPyS6ewu6AIBW3bMEmdZxFxLcPXmqS4YQUoaaXo8zaJc2gov985y0vMQmYK3i6lwK0K0crkwJ7hOwro4Rw9aCj6ZxmDQpgFAcFzBYjEjX1AuL8Wdq7ezZ6WIqgMT7rIYZxyb3t/Eii+kC4aYZx1WwwCoq41d6LCYnptC86e2MwcMVyPfYceIY6/wXcv1RlkttmkKZwjDwzDJ6TrS+hJxMkie5b/zn/ph6F62TSUVX0sZqtaTeQsHNJK2EfEoI3EPHQZU45pfpsAHhkKHvd/jfiiV7u7oqQGwzlVQCaWgVVcPdtnI52KHXjC3y5SsQMGHUeW59/33UwbjnwG65RVZ+C+aXJR1nZzwHnegSxV3zNrzAuXtf0o5xUJ6ZsseJIS1ApBflrXAEaQ4v0c/atmVo2sLplyR2uqBezJekObbAW7eXcyxz8qzzuH3Ke6nI5AU6n3ZlYXYXd0N4/2SddHJ0dQb/3d/a2melnRYL9Tpv7ys++5PZtylKwwASN1SRPDFGVQHjVFqsu6tzBcdVCqTDu2VtXZa3u0KtNvBdCenU3CYLigAAA=', box: [66.14, 62.63, 62.28, 29.12] },
+  web: { b: 'UklGRqoJAABXRUJQVlA4IJ4JAAAwKACdASp9ADgAPlEejEQjoaEY+c7YOAUEswBfmuB/K+eq1P2X8ivyq+ZWz/47hMzr9mM9vbUeYDza/Qb6AH6x+kB7CX7eewb+0vpzeyn/bf+36Yd4LfsPD3y3ecPZ71kcr9pX0OfOcVvw01AvXf+P/LPhiwBfm/9Z/zv2wc5X1781L/IfmZzYdAD84f5b7sPjK/0P8l6Bvob/p/5D4DP5h/T/9j/c/bA9ln7aey/+whVXOpPInGtWyrtSm2o8Y5s5TOItTHY7ibdXWr8/2VGzsmkr04LQik4vgEw+it4F8uM0BeyAGdUd8bcdpXU8iGCmFf9Bwn+blZkcSbqgmqw1gumYI5SPN4dC3P5qq3ecuhQNR+TJCU/2e43H+4qYjU2Tn3tB3yrII3ZoYntUXLrdQu9Q0aIgrw75xo9j8bQA4qVCcjJu99kl7gAA+LIvYScsGR4rnKV/HtAvvElkOfy1ubde6frc5c24w76fjxBlca+4RK7Vn+tWPzz9Y3giGfQ/hQRJULKUtsrInMoiCycMnBc+n/1fD0z/PpPMZLMcZxZivjC5TMe2PzzybZ6zlZZW36yUYHGrzN/me9Hqx4+NU13Ur6s7rPanI/3lyv1Z3mHTgCkymXNrp3KEoJkWOHfuZJOx8zY3Cr7/GjMqnolXNQZ2svrXZh97Wk7uDOKkV5yl4i/T5164LFyny8uRI5z6l/KsuUpsNo5JvH0pOt5O0kvENr4R9XZFrKANFau448rN9X/7M40Sjao5klkNXx/y2hXv3qG11CGuf1vppjq9ArH6UfT0oytglXSjXVy2npw3MdPw8lK5/oxhiwzHapjY8ApaR5mXHlBVEDAHEGr2LvDGgCFHILYxHgYwosXwqMx/S9u0w58CgWL7/6V5lFnTIiwGRXzFsX/yoaca8rwtev0ygclHwLUMW5yHtj/9aSBwNjgebh+vaXPnih9+gC2OhrA2rrTgntM3/4MvJP34F/CIqAe+2lpI0Im5A17wB1Xf6UDbQleMnod1HuY/EGHjym8Nu9rskX/zS05ZeEl8EtWSq07OAxMsPzdHrf2Z5hWArWp7rxlUelxnZ2m0l1XQ5oj+Ato/tkBOPDFqeKsMQRvAwc2eYXuzGT9xjbAJVv+edAQaYm0fU2V6XNWPujyFpWc5G//BGE9Lqx9HBtcokRbLqZiK8UuolFNq02fvd4F/NoHRcSQcN/7u1/idLReiOzTQmwQOoo+d5l/Zqr0MnaWgq8Sgvrzy5Iv9yyepXucAliknifv0X9G/OnffRTT8PK7pZOci3m1cZYDAzfvoT8f0++8l1W0KMmBSt7v4Su3YKRsyH/jzziNmRYeqiUldXsfCqV5vaJoBhkKb+YuHe//CzZWCRzpb5BjdCwYKr2JHtrGKrAOT4XN7shuQvCt9dkyHxXT2lVyk9ZkV+g6BlO/SMeDX3rmYKMEku+ClGsBmmWqb/roOm+vTK/OycRexQyqT9uDgeHdwfhcMrfB8Zw/7UUjda+1ttgbtSpkpceVEKh4FsHeNJvXeE7/SPhMvJIOlCdoQOAEYsIvV7crXKVabZibFcrrwCgBKvsWS4+xV5OUvBvlpwR/NwfuPJGq32qK3u88RmzLX7+ptPuOvEaVxbP/GRraKxAz5Gepv9RokAYBAlEzRho17yQYnmageEWcY8OZ8GkWSgWLP4Hli9nQWmA3z8HR7/ZNsriqpIiOdM8W+7/wUURH68lX2/lZzUoQSQtjqxP+cYXn+EYWvqjTMxqW++CxZzfHgyuoAuXlk/eBr0fJpMpw4ndgw2QXTr7setMxVIctEWIs6quq+hiTHPXcmrlAMAx+PA9+a+HA020CmqNoh9MbxLP7Gwv5N3QPs1BnVVMUwpRwEu6w+1XVMCocSBwRd4s6lMlDC4oMbgO6GhtdLbIaGxXZd+b3ob36qJK8K4ocmE6S871lDk33cnm6qxf8fgdcurXC32UU7w+9Pd9K92mj3/pxJyiMayTv9hkfgM7v4WCT28j67YDxwilOC4KkuS3B1v1rqwiAXrDa80LXDCTOvNMVbXQ2NXzCVCXKYozC6FxQ4L+pNuKxGLvA5Mz5F8PuNHnyljZAj1nl8D6nIO/LHHwbXylHyriuwNMV49xVSe/KnQnDjF1olPID74SIhVs3GywJGo+isYZ+OiCM1hNivW5k8ym6oho3yZJd+bQMO5LQ6xEUicwMiTf1fIbYRdDkOezslUNDGPA8PopNVTL3zSV8lj71CfOVCOhiu6ninmB5XCJ9gsIZ1nis5ncZ9lmTjn/W7KPQRH1loXM5GeDFNR+XtJc/OFLc5JZij8AI6q8hEW+uI6agxHedZ+CH7zVK1KEp1R1ZnkWwJc//GR3uzP9Oa3w0n4aMF1i/wR7AfpnPl4QSLexp9whIoXZT3qw9c7NdOo3feFBawVWizFmPcrVzsSa1rKhGEUoQ/UzvgkmOi1rgmri7SXJBO6frEv++rulqLaaTrYU/4W9krYfJosy6P94e1XQ2CX7CQMbo5ONsd9DR8k/FokqEXyhrrNuFuOyqDJN1B5og9H1bUDuc2XrUKoQY/FzgGe661p6w1aokkz3Y/SZydmb6XiAB+L7/O3ppnfK9ZvEJa3OjgxM/AD6c4ltsbVwEBkqIEz6PJtCjyu2qxYps6n9SFihWSO8DNEPtPZkmAm6uc4cbKSsmMhVMw5D/x3sUVgqYSJ5zzskAwCF39Y3GpRMGk2SRIX4qRV/aDzxc4sbiJbtRzRlt+C5MNhFcIXgZ/Dze62PYnCo3dh8v3r93L/SieaYyUtH4ZqvaUXWtZmEab7bZIQu1tzgifdrv2SiNyokFjB9/apw2lQv0+VMOF79UnzRmXifiwHKsVPwrJ+093xA4Tsy5Pb9DigZ1XRLncb+y4XXwqaeWRIgeag46Go0W49O8tZHjo46uMaMKQwM9FfZ/19J0iDj2NqVKwazIF0kWITFPTlL+8rI2vtvtz4MqPM2zi+FDfkx0heLT+qVkIpCLc3a9HftmZUzrtFHghPkfvuOH3fpE1QQhHawx+eC/lcT5h1fpAR2E+pLZcYIIgH/Zbyza/rSn6nSjwcRRXF3lyUhSPN//aHiqPMjMmqAFtRa5qh2PM+fIoiRDuXtvaOUiQpBG5HBywlaPre3hUCM2+TDTP7OUVQx+iHilmPuMlVvRq4yzyWZKh0Zs1wFx8iVDSEXJ4rJVxLr7CeX1d4/8ntgXiTumDGxRDowqTQb1UQERzxjvscMW12HSzCTsZMLkf62RW6voGwjEj5fSwUzpBPRF2AT4AAA==', box: [65.79, 64.21, 62.28, 28.25] },
+  watch: { b: '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', box: [65.61, 59.65, 63.16, 32.46] },
 }
 // ---- end generated ----
 
@@ -51,7 +55,7 @@ const cacheAll = atom({ plugin: 'pet', key: 'cacheAll' } as const, 0)
 const cacheOld = atom({ plugin: 'pet', key: 'cacheOld' } as const, false)     // cacheHit restored from the last run
 const cost = atom({ plugin: 'pet', key: 'cost' } as const, null as number | null)
 const today = atom({ plugin: 'pet', key: 'today' } as const, { d: '', turns: 0, tools: 0, pats: 0, focus: 0, rests: 0, pts: 0 } as Today)
-const stats = atom({ plugin: 'pet', key: 'stats' } as const, { turns: 0, tools: 0, pats: 0, focus: 0, night: 0, longest: 0, pokes: 0, compacts: 0, breaks: 0, errors: 0, wakes: 0, bursts: 0, ignored: 0, recoveries: 0, busyDays: 0, comforts: 0, peak: 0 } as Stats)
+const stats = atom({ plugin: 'pet', key: 'stats' } as const, { turns: 0, tools: 0, pats: 0, focus: 0, night: 0, longest: 0, pokes: 0, compacts: 0, breaks: 0, errors: 0, wakes: 0, bursts: 0, ignored: 0, recoveries: 0, busyDays: 0, comforts: 0, peak: 0, agentsMade: 0, swarm: 0 } as Stats)
 const streak = atom({ plugin: 'pet', key: 'streak' } as const, { last: '', n: 0, max: 0 } as Streak)
 const achieved = atom({ plugin: 'pet', key: 'achieved' } as const, [] as string[])
 const showAch = atom({ plugin: 'pet', key: 'showAch' } as const, false)
@@ -63,6 +67,11 @@ const flashText = atom({ plugin: 'pet', key: 'flashText' } as const, '')
 const flashSprite = atom({ plugin: 'pet', key: 'flashSprite' } as const, 'idle' as Sprite)
 const greetText = atom({ plugin: 'pet', key: 'greetText' } as const, '')
 const workStart = atom({ plugin: 'pet', key: 'workStart' } as const, 0)      // start of the current stretch of work (0: none)
+const workKind = atom({ plugin: 'pet', key: 'workKind' } as const, '' as WorkKind)      // what the tool calls of the turn are about (the face and the line of the working pose follow it)
+const kindAt = atom({ plugin: 'pet', key: 'kindAt' } as const, 0)      // when workKind last changed
+const turnStart = atom({ plugin: 'pet', key: 'turnStart' } as const, 0)      // start of the turn that is running now, main loop only (0: none)
+const blocked = atom({ plugin: 'pet', key: 'blocked' } as const, false)      // one of her own calls to an agent tool is still open: she has handed the work on and waits for the report
+const agentN = atom({ plugin: 'pet', key: 'agentN' } as const, 0)      // subagents and workflow agents running now (she shows that many little helpers beside her)
 const lastActive = atom({ plugin: 'pet', key: 'lastActive' } as const, 0)
 const nextRemind = atom({ plugin: 'pet', key: 'nextRemind' } as const, 0)
 const remindDue = atom({ plugin: 'pet', key: 'remindDue' } as const, false)
@@ -120,11 +129,32 @@ const LONG_HOLD_MS = 10 * 60 * 1000          // the long-task pose stays this lo
 const LONG_TOAST_MS = 10000            // how long the long-task, rest-reminder and achievement toasts stay (the default is 4 s)
 const REST_AFTER_MS = 60 * 60 * 1000      // "you have been working for an hour"
 const WORK_GAP_MS = 15 * 60 * 1000        // a break this long starts a new stretch of work
+const KIND_HOLD_MS = 1500                 // a kind of work stays on screen at least this long: tool calls come in bursts and the face must not flicker (a read is over in a moment, so not longer)
+// Tools that hand the work to other agents and do not come back until they are done: while one of her own calls to them is open she is waiting.
+const AGENT_TOOLS = ['Agent', 'Task', 'Workflow', 'TaskOutput']
+const LONG_RUN_MS = 20 * 60 * 1000        // a turn this long also says how long it has been going
+const AGENT_GRACE_MS = 60 * 1000          // a new agent is not struck off the list for not showing up in `$.agent.list()` yet
+const WF_AGENT_MAX_MS = 3 * 60 * 60 * 1000      // a workflow agent is not in that list; if its end never arrives it is forgotten after this long
+const AWAY_MS = 45 * 60 * 1000            // no prompt and no click on her for this long: the person has gone away, so a long run is not their work
+// what a tool call is about, by the tool's name only (never its arguments)
+const TOOL_KIND: Record<string, WorkKind> = {
+  Read: 'read', NotebookRead: 'read',
+  Grep: 'search', Glob: 'search', LS: 'search',
+  WebSearch: 'web', WebFetch: 'web',
+  Edit: 'edit', MultiEdit: 'edit', Write: 'edit', NotebookEdit: 'edit',
+  Bash: 'run', PowerShell: 'run', BashOutput: 'run',
+  Agent: 'agent', Task: 'agent',
+}
+// the kinds that have a picture of their own; the others keep the typing pose
+const KIND_SPRITE: Partial<Record<WorkKind, Sprite>> = { read: 'read', search: 'search', web: 'web' }
 const FOCUS_MS = 25 * 60 * 1000
-const BUILD_INFO = 'v0.5.2 · built 2026-10-24 18:38'      // filled in by build.py: tells which build a conversation has loaded (/pet version)
+const BUILD_INFO = 'v0.6.0 · built 2026-11-04 19:08'      // filled in by build.py: tells which build a conversation has loaded (/pet version)
 let demoRemind = false      // true while the reminder on screen comes from the /pet rest demo (continuing is not counted)
 let moodDemoUntil = 0      // end time of a mood shown by the /pet mood demo (a demo worry is not a real worry: no recovery, no comfort is counted)
 let demoBreakEnd = 0      // end time of a break started by the /pet break demo
+let blockedCalls = 0      // how many of her own agent-tool calls are open
+let lastHuman = 0      // the last time the person did something here (a prompt, a click on her); 0: not yet
+const liveAgents = new Map<string, { at: number; wf: boolean }>()      // agents started here that have not ended yet
 let lastLimits = ''      // what was last written to the store as 'limits' / 'cacheHit' by this conversation (no write when nothing changed)
 let lastHit = -1
 const BREAK_MS = 5 * 60 * 1000
@@ -170,6 +200,51 @@ const T: Record<string, string[][]> = {
     ['唔……这个有点意思。', '等等，让我捋捋思路～', '我在想，别吵我哦。', '嗯嗯嗯……脑袋转起来啦！', '让我挠挠头，马上有主意～', '哇，这题有点难，不过我喜欢！', '别急别急，灵感快来了。', '唔……有头绪了又好像没有……'],
     ['嗯……让我好好想想。', '我在想怎样才能最帮到你。', '别担心，我在想办法。', '给我一点安静的时间，好吗？', '我想想……怎样对你最好。', '你在旁边，我想得更起劲了。', '让我想个周全的办法。', '再等我一下，我快想到了。'],
   ],
+  work_read: [
+    ['正在查阅资料，请稍候。', '正在翻阅相关文件，主人。', '正在仔细阅读，请稍等。', '资料较多，正在逐份过目。', '请稍候，我先把内容看明白。'],
+    ['翻翻翻……这文件还挺长～', '我在认真看，一个字都不漏！', '让我看看这里写了什么～', '嗯嗯，看懂一半啦！', '资料堆成山啦，不过难不倒我！'],
+    ['我在看你写的东西，写得真用心。', '让我先把情况弄清楚，再动手。', '慢慢看，不着急，我会看仔细的。', '先看明白，才能帮到你。', '看你的文件，好像在读你的心思～'],
+  ],
+  work_search: [
+    ['正在检索，请稍候。', '正在查找相关内容，主人。', '正在各处搜寻，请稍等。', '正在核对位置，请稍候。', '检索中，很快就好。'],
+    ['找找找……它到底藏在哪儿呀～', '我在翻箱倒柜！', '放大镜出动！', '嗯？这里好像有线索！', '捉迷藏我可是很擅长的！'],
+    ['别急，我会把它找出来的。', '我在帮你找，一处也不放过。', '找到之前，我不会放弃的。', '你需要的东西，我来找。', '慢慢找，总会找到的。'],
+  ],
+  work_web: [
+    ['正在联网查询，请稍候。', '正在检索网络上的资料，主人。', '正在查阅网页，请稍等。', '网络资料较多，正在筛选。', '请稍候，我去网上核实一下。'],
+    ['上网冲浪中～', '让我搜搜看别人是怎么说的！', '网页好多呀，我挑重点看～', '哇，这个页面还挺有意思！', '网络的海洋，我来捞一捞～'],
+    ['我去外面的世界帮你问问。', '网上的信息很杂，我帮你挑靠谱的。', '我在帮你查，很快回来。', '外面的消息，我替你看着。', '等我带好消息回来～'],
+  ],
+  work_edit: [
+    ['正在修改文件，请稍候。', '正在编写内容，主人。', '正在逐处修改，请稍等。', '正在整理并写入，请稍候。', '修改进行中，请放心。'],
+    ['敲敲敲，改改改～', '这里改一下，那里补一笔！', '写得手指都要冒烟啦～', '改好一处是一处！', '键盘都要敲出火星啦！'],
+    ['我在帮你把它改好，每一处都会小心。', '慢慢写，我会写得漂亮。', '改动的地方，我都记着呢。', '为了你，我会写得很认真。', '再等等，我在好好写。'],
+  ],
+  work_run: [
+    ['正在执行命令，请稍候。', '正在运行，请稍等，主人。', '命令执行中，请留意结果。', '正在运行程序，请稍候。', '正在验证，请稍等片刻。'],
+    ['跑起来跑起来～', '运行中！希望别出错……', '盯着屏幕等结果，心跳加速～', '一路绿灯就好了！', '命令发出去啦，看它怎么回答！'],
+    ['我在帮你运行，会盯着它的。', '不管结果怎样，我都在。', '等结果的时候，我也有点紧张呢。', '别担心，我会把结果告诉你。', '我在，你放心。'],
+  ],
+  work_agent: [
+    ['已安排助手分头处理，请稍候。', '正在调度助手，主人。', '助手们正在各自办理，请稍等。', '正在汇总各方进展。', '事务已分派，请稍候。'],
+    ['小助手们出动啦！', '我负责指挥，大家分头干～', '派了帮手，我来协调！', '大家一起上，效率翻倍～', '等小伙伴们回来汇报！'],
+    ['我找了帮手一起做，你放心。', '大家一起，很快就好。', '我来统筹，你只管等。', '有这么多人帮忙，我们不会慢的。', '等他们汇报，我再告诉你。'],
+  ],
+  watch: [
+    ['已派出助手，正在等候汇报，请稍候。', '{n} 位助手尚在处理，我在等候结果。', '正在等待助手们的回报，主人。', '助手们仍在办理，完成后我会汇总。', '请稍候，等助手们回报后即向您汇报。'],
+    ['我这边忙完啦，等小助手们回来汇报～', '小家伙们还在干活，我先守着！', '小助手们还没回来，再等等～', '好想知道他们做得怎么样呀……', '交给他们了，我在这儿等消息！'],
+    ['我在等他们回来，你放心。', '他们还在忙，等一会儿就有结果了。', '我守在这里，一有消息就告诉你。', '小帮手们在努力，我们一起等。', '不着急，我陪着你一起等他们。'],
+  ],
+  swarm: [
+    ['已派出 {n} 位助手同时处理，请稍候。', '{n} 位助手正在分头办理，主人。', '正在统筹 {n} 路并行的事务，请稍等。', '助手们各司其职，共 {n} 位，请放心。', '{n} 路任务并行中，我会汇总结果。'],
+    ['{n} 个小助手一起干活，热闹极了～', '我是指挥官！手下 {n} 个小家伙～', '{n} 路并行，我脑子都要转不过来啦！', '小助手们加油！（挥小旗）', '全员出动，一共 {n} 个！'],
+    ['有 {n} 个小帮手陪着我，一点都不累。', '大家一起努力呢，共 {n} 个，你放心。', '我在盯着他们，{n} 个都乖乖干活。', '人多力量大，{n} 个一起，很快就好。', '等他们都回来，我第一时间告诉你。'],
+  ],
+  workLong: [
+    ['已持续工作 {d}，仍在推进，请主人放心。', '本次任务已进行 {d}，我会继续完成。', '已用时 {d}，请主人不必在此等候。', '任务耗时较长（{d}），请耐心等待。', '目前已 {d}，仍在处理，请放心。'],
+    ['已经跑了 {d} 啦，我还撑得住！', '{d} 了……这活儿可真不小～', '你去忙别的吧，我干完叫你！', '都 {d} 了，我是不是很能干？', '{d}，还在努力中，别担心我！'],
+    ['已经 {d} 了，我还在，你也别太累。', '这 {d} 里我一直在，你可以去歇一歇。', '让你等了 {d}，快好了，再等等我。', '{d} 了，辛苦啦，你去喝点水吧。', '我会做完的，你先照顾好自己。'],
+  ],
   wait: [
     ['主人，需要您确认。', '请您过目，主人。', '等候您的指示。'],
     ['主人～该你拿主意啦！', '喂，这里要你点头才行哦。', '我可不敢擅自做主～'],
@@ -201,9 +276,9 @@ const T: Record<string, string[][]> = {
     ['嗯？想我了吗？', '别闹啦……不过你戳我我也不讨厌。', '我在哦，一直都在。', '又找我玩吗？好呀。'],
   ],
   longDone: [
-    ['任务已完成，用时 {m} 分钟，请主人过目。', '辛苦了，{m} 分钟的任务已经完成。'],
-    ['{m} 分钟的大活儿搞定啦，快来看看！', '久等啦～花了 {m} 分钟，不过值得！'],
-    ['让你等了 {m} 分钟，抱歉。做好了，来看看吧。', '{m} 分钟的任务完成啦，辛苦你陪我等。'],
+    ['任务已完成，用时 {d}，请主人过目。', '辛苦了，{d}的任务已经完成。'],
+    ['{d}的大活儿搞定啦，快来看看！', '久等啦～花了 {d}，不过值得！'],
+    ['让你等了 {d}，抱歉。做好了，来看看吧。', '{d}的任务完成啦，辛苦你陪我等。'],
   ],
   rest: [
     ['主人，您已经连续工作一小时了，请适当休息。', '主人，休息一下对身体好，请起来活动活动吧。', '已工作一小时，请主人注意身体。'],
@@ -318,7 +393,7 @@ const T: Record<string, string[][]> = {
 } as any
 
 // The four lines seen all day long (idle, work, think, done) are never the same twice in a row; the pick is kept for as long as the seed stays the same.
-const NO_REPEAT = ['idle', 'work', 'think', 'done', 'idle_happy', 'idle_sleepy', 'idle_worried', 'idle_excited']
+const NO_REPEAT = ['idle', 'work', 'think', 'done', 'work_read', 'work_search', 'work_web', 'work_edit', 'work_run', 'work_agent', 'swarm', 'watch', 'workLong', 'idle_happy', 'idle_sleepy', 'idle_worried', 'idle_excited']
 const lastPick: Record<string, { seed: number; text: string }> = {}
 const say = (cat: string, lvl: number, seed: number, vars?: Record<string, string | number>) => {
   const arr = T[cat][stageOf(lvl)]
@@ -335,6 +410,14 @@ const say = (cat: string, lvl: number, seed: number, vars?: Record<string, strin
   let s = arr[i]
   if (vars) for (const k of Object.keys(vars)) s = s.split('{' + k + '}').join(String(vars[k]))
   return s
+}
+// a length of time as people say it: 45 minutes, 3 hours, 3 hours 12 minutes
+const fmtDur = (ms: number) => {
+  const m = Math.max(1, Math.round(ms / 60000))
+  if (m < 60) return `${m} 分钟`
+  const h = Math.floor(m / 60)
+  const r = m % 60
+  return r === 0 ? `${h} 小时` : `${h} 小时 ${r} 分`
 }
 // time-of-day greeting for the first start of a day
 const helloText = (lvl: number, hour: number) => {
@@ -393,8 +476,8 @@ async function recoverMood($: any, now: number): Promise<boolean> {
 
 // ---- lifetime counters ----
 // Stats saved by an older version lack the newer fields: they count from 0.
-const SUM_KEYS = ['turns', 'tools', 'pats', 'focus', 'night', 'pokes', 'compacts', 'breaks', 'errors', 'wakes', 'bursts', 'ignored', 'recoveries', 'busyDays', 'comforts'] as const
-const MAX_KEYS = ['longest', 'peak'] as const
+const SUM_KEYS = ['turns', 'tools', 'pats', 'focus', 'night', 'pokes', 'compacts', 'breaks', 'errors', 'wakes', 'bursts', 'ignored', 'recoveries', 'busyDays', 'comforts', 'agentsMade'] as const
+const MAX_KEYS = ['longest', 'peak', 'swarm'] as const
 const normStats = (x?: Partial<Stats> | null): Stats => {
   const o: any = {}
   for (const k of SUM_KEYS) o[k] = Math.max(0, num((x as any)?.[k]))
@@ -461,6 +544,9 @@ const ACHS: Ach[] = [
   A('cmp10', 'misc', '整理大师', '压缩 10 次上下文', 6, 10, c => c.s.compacts),
   A('recover', 'misc', '雨过天晴', '她担心的时候，成功完成一轮对话 10 次', 4, 10, c => c.s.recoveries),
   A('peak', 'misc', '极限操作', '5 小时额度用到 95% 以上', 5, 1, c => c.s.peak),
+  A('ag10', 'misc', '派遣官', '累计派出 10 个助手（子 agent）', 2, 10, c => c.s.agentsMade),
+  A('swarm5', 'misc', '小队长', '同时有 5 个助手在干活', 3, 5, c => c.s.swarm),
+  A('swarm15', 'misc', '指挥官', '同时有 15 个助手在干活', 5, 15, c => c.s.swarm),
   A('err10', 'misc', '屡败屡战', '经历 10 次出错', 4, 10, c => c.s.errors),
   A('wake', 'secret', '别吵醒我', '把睡着的她戳醒 10 次', 5, 10, c => c.s.wakes, true),
   A('burst', 'secret', '戳戳戳', '10 秒内连续戳她 5 次', 5, 1, c => c.s.bursts, true),
@@ -488,6 +574,10 @@ const ANIM: Record<Sprite, string> = {
   surprised: '<animateTransform attributeName="transform" type="translate" values="0 0;0 -12;0 0" dur="0.5s" repeatCount="1"/>',
   idle: '<animateTransform attributeName="transform" type="translate" values="0 0;0 -4;0 0" dur="3s" repeatCount="indefinite"/>',
   work: '<animateTransform attributeName="transform" type="translate" values="0 0;0 -2.5;0 0" dur="0.5s" repeatCount="indefinite"/>',
+  read: '<animateTransform attributeName="transform" type="translate" values="0 0;0 -1.5;0 0" dur="3.4s" repeatCount="indefinite"/>',
+  search: '<animateTransform attributeName="transform" type="rotate" values="-1.5 100 210;1.5 100 210;-1.5 100 210" dur="2.4s" repeatCount="indefinite"/>',
+  web: '<animateTransform attributeName="transform" type="translate" values="0 0;0 -2;0 0" dur="1.6s" repeatCount="indefinite"/>',
+  watch: '<animateTransform attributeName="transform" type="rotate" values="-1 100 210;1 100 210;-1 100 210" dur="3.8s" repeatCount="indefinite"/>',
   wait: '<animateTransform attributeName="transform" type="rotate" values="-3 100 210;3 100 210;-3 100 210" dur="1.6s" repeatCount="indefinite"/>',
   done: '<animateTransform attributeName="transform" type="translate" values="0 0;0 -14;0 0;0 -9;0 0" dur="1.4s" repeatCount="2"/>',
   sleep: '<animateTransform attributeName="transform" type="translate" values="0 0;0 2;0 0" dur="4.5s" repeatCount="indefinite"/>',
@@ -502,15 +592,15 @@ const svgMemo: Record<string, string> = {}
 const MOOD_ANIM: Partial<Record<Sprite, string>> = {
   worry: '<animateTransform attributeName="transform" type="translate" values="-1.5 0;1.5 0;-1.5 0" dur="0.4s" repeatCount="8"/>',
 }
-const petSvg = (m: Sprite, img: string, asMood: boolean = false) => {
+const petSvg = (m: Sprite, img: string, asMood: boolean = false, extra: string = '') => {
   const key = m + '|' + img.length + (asMood ? '|mood' : '')
-  if (svgMemo[key] !== undefined) return svgMemo[key]
+  if (svgMemo[key] !== undefined) return svgMemo[key] + extra + '</svg>'
   const bl = BLINK[m]
   const blink = bl
     ? `<image x="${bl.box[0]}" y="${bl.box[1]}" width="${bl.box[2]}" height="${bl.box[3]}" opacity="0" href="data:image/webp;base64,${bl.b}"><animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;0.90;0.905;0.945;0.95;1" dur="4.6s" repeatCount="indefinite"/></image>`
     : ''
-  svgMemo[key] = `<svg xmlns="http://www.w3.org/2000/svg" width="96" height="105" viewBox="0 0 201 220"><g>${(asMood && MOOD_ANIM[m]) || ANIM[m]}<image width="201" height="220" href="data:image/webp;base64,${img}"/>${blink}</g></svg>`
-  return svgMemo[key]
+  svgMemo[key] = `<svg xmlns="http://www.w3.org/2000/svg" width="96" height="105" viewBox="0 0 201 220"><g>${(asMood && MOOD_ANIM[m]) || ANIM[m]}<image width="201" height="220" href="data:image/webp;base64,${img}"/>${blink}</g>`      // (the closing tag is added below: the helpers go in front of it)
+  return svgMemo[key] + extra + '</svg>'
 }
 
 const barColor = (p: number) => (p >= 85 ? '#ef4444' : p >= 60 ? '#f5b400' : '#22c55e')
@@ -707,7 +797,74 @@ async function takePatLocked($: any, now: number): Promise<boolean> {
 }
 
 let recentPokes: number[] = []
+const kindOfTool = (tool: string): WorkKind => TOOL_KIND[tool] ?? 'other'
+
+// Little helpers beside her, one for each agent that is running (up to four; more are a number in the corner).
+// They are four little creatures of their own (typing, reading, searching, web; one picture, source/helpers.webp), bobbing a little out of step with each other.
+const MINI_POSE = ['work', 'read', 'search', 'web']
+const MINI_SLOTS: number[][] = [[-4, 156], [149, 156], [-4, 96], [149, 96]]      // x, y of each helper in the 201 x 220 picture (a helper is 56 x 62)
+async function swarmLayer($: any, n: number): Promise<string> {
+  let out = ''
+  for (let i = 0; i < Math.min(n, MINI_SLOTS.length); i++) {
+    const img = await loadSprite($, 'mini_' + MINI_POSE[i % MINI_POSE.length])
+    if (!img) continue
+    const slot = MINI_SLOTS[i]
+    out += `<g><animateTransform attributeName="transform" type="translate" values="0 0;0 -3;0 0" dur="${(0.55 + 0.1 * i).toFixed(2)}s" begin="-${(0.17 * i).toFixed(2)}s" repeatCount="indefinite"/><image x="${slot[0]}" y="${slot[1]}" width="56" height="62" href="data:image/webp;base64,${img}"/></g>`
+  }
+  if (n > MINI_SLOTS.length) out += `<g><circle cx="176" cy="24" r="19" fill="#f97316"/><text x="176" y="32" text-anchor="middle" font-family="Consolas,Menlo,monospace" font-size="22" font-weight="700" fill="#ffffff">${n > 99 ? '99+' : n}</text></g>`
+  return out
+}
+
+async function agentsChanged($: any) {
+  const n = liveAgents.size
+  if ((await read($, agentN)) !== n) await update($, agentN, () => n)
+}
+
+// Agents are struck off when their own turn ends. A background agent can outlive the main turn, and an agent that was killed never
+// ends one, so every half minute the list the engine keeps is looked at too (a workflow's agents are not in it: those expire by age).
+async function reconcileAgents($: any, now: number) {
+  let running: Set<string> | null = null
+  try {
+    const list = (await $.agent.list()) as any[]
+    running = new Set(list.filter(a => a.status === 'running' || a.status === 'pending' || a.status === 'waiting').map(a => a.id as string))
+  } catch (err) {
+    running = null
+  }
+  let changed = false
+  for (const [id, a] of liveAgents) {
+    const gone = a.wf ? now - a.at > WF_AGENT_MAX_MS : running !== null && !running.has(id) && now - a.at > AGENT_GRACE_MS
+    if (gone) {
+      liveAgents.delete(id)
+      changed = true
+    }
+  }
+  if (changed) await agentsChanged($)
+}
+
+// What the working pose is about. Tool calls come in bursts (a read, a search, an edit within seconds): a new kind is taken up only
+// when the current one has been on screen for KIND_HOLD_MS, so the face does not flicker between them.
+async function noteKind($: any, kind: WorkKind, now: number) {
+  if ((await read($, workKind)) === kind) return
+  if (now - (await read($, kindAt)) < KIND_HOLD_MS) return
+  await update($, kindAt, () => now)      // `kindAt` first, as with `since`: the redraw must not see the new kind with the old time
+  await update($, workKind, () => kind)
+}
+
+// The person did something here (sent a prompt, clicked on her). After a long silence while a turn ran on alone, the stretch of work
+// they come back to is a new one: the hours the machine worked by itself were not their work.
+async function touched($: any) {
+  const now = await $.clock.now()
+  const away = lastHuman > 0 && now - lastHuman >= AWAY_MS
+  lastHuman = now
+  if (away && (await read($, workStart)) > 0) {
+    await update($, workStart, () => now)
+    await update($, nextRemind, () => now + REST_AFTER_MS)
+    await update($, remindDue, () => false)
+  }
+}
+
 async function react($: any, kind: 'pat' | 'poke') {
+  await touched($)
   const now = await $.clock.now()
   const wasAsleep = (await read($, mode)) === 'sleep'
   await update($, reactKind, () => kind)
@@ -779,6 +936,7 @@ async function dismissWarn($: any) {
 
 // "I have read it" on the one-hour reminder
 async function dismissRemind($: any) {
+  await touched($)
   demoRemind = false
   const now = await $.clock.now()
   const lvl = levelOf(await read($, affection))
@@ -808,6 +966,7 @@ async function fillCompact($: any) {
 }
 
 async function startFocus($: any) {
+  await touched($)
   const now = await $.clock.now()
   const lvl = levelOf(await read($, affection))
   await update($, breakEnd, () => 0)      // a new timer ends the break
@@ -820,6 +979,7 @@ async function startFocus($: any) {
 }
 
 async function cancelFocus($: any) {
+  await touched($)
   const now = await $.clock.now()
   const lvl = levelOf(await read($, affection))
   await update($, focusEnd, () => 0)
@@ -1019,7 +1179,7 @@ async function restoreSaved($: any) {
 // declared once, when the session starts
 async function registerDemo($: any) {
   try {
-    await $.command.register({ name: 'pet', description: '演示桌宠的提醒和姿势', argumentHint: '[long|rest|ach|hello|focus|break|compact|warn|level|mood|start|cancel|version]' })
+    await $.command.register({ name: 'pet', description: '演示桌宠的提醒和姿势', argumentHint: '[long|rest|ach|hello|focus|break|compact|warn|level|mood|read|search|web|edit|run|agent|wlong|swarm|watch|start|cancel|version]' })
   } catch (err) {
     // the demo command is optional
   }
@@ -1029,7 +1189,7 @@ async function demo($: any, what: string): Promise<string> {
   const lvl = levelOf(await read($, affection))
   const now = await $.clock.now()
   if (what === 'long') {
-    const line = say('longDone', lvl, now / 1000, { m: 5 })
+    const line = say('longDone', lvl, now / 1000, { d: fmtDur(5 * 60000) })
     $.ui.toast(line, { timeoutMs: LONG_TOAST_MS })
     await flash($, line, 'long', 60000)
     return '演示：长任务完成（姿势保持 1 分钟，或到下一次发消息）'
@@ -1103,7 +1263,31 @@ async function demo($: any, what: string): Promise<string> {
     return '演示：番茄钟结束'
   }
   $.ui.toast('这就是弹出提示的样子，会停留 10 秒。', { timeoutMs: LONG_TOAST_MS })
-  return '用法：/pet long | rest | ach | hello | focus | break | compact | warn | level | mood | start | cancel | version（只是演示，不计入任何统计）'
+  if (['read', 'search', 'web', 'edit', 'run', 'agent'].includes(what)) {
+    const k = what as WorkKind
+    await flash($, say('work_' + k, lvl, now / 1000), KIND_SPRITE[k] ?? 'work', 20000)
+    return '演示：正在' + { read: '读文件', search: '搜索', web: '联网', edit: '改文件', run: '跑命令', agent: '派助手' }[k as 'read'] + '（20 秒；没有专属图的用敲键盘的姿势）'
+  }
+  if (what === 'swarm' || what.startsWith('swarm ')) {
+    const n = Math.max(1, Math.min(20, parseInt(what.slice(5), 10) || 3))
+    for (let i = 0; i < n; i++) liveAgents.set('demo-' + i, { at: now, wf: true })      // (wf: the half-minute check leaves them alone; they go by themselves)
+    await agentsChanged($)
+    $.clock.after(30000, async () => {
+      for (let i = 0; i < 20; i++) liveAgents.delete('demo-' + i)
+      await agentsChanged($)
+    })
+    await flash($, say('swarm', lvl, now / 1000, { n }), 'work', 30000)
+    return '演示：' + n + ' 个助手同时在干活（30 秒；用法：/pet swarm 6，最多 20）'
+  }
+  if (what === 'watch') {
+    await flash($, say('watch', lvl, now / 1000, { n: 3 }), 'watch', 20000)
+    return '演示：主任务交给助手后等汇报（20 秒）'
+  }
+  if (what === 'wlong') {
+    await flash($, say('workLong', lvl, now / 1000, { d: fmtDur(192 * 60000) }), 'work', 20000)
+    return '演示：长时间工作中的台词（20 秒）'
+  }
+  return '用法：/pet long | rest | ach | hello | focus | break | compact | warn | level | mood | read | search | web | edit | run | agent | wlong | swarm | watch | start | cancel | version（只是演示，不计入任何统计）'
 }
 
 export const register: Register = on => {
@@ -1119,7 +1303,7 @@ export const register: Register = on => {
       const t = await read($, since)
       const now = await $.clock.now()
       const focusing = (await read($, focusEnd)) > 0      // she keeps you company during a focus timer instead of dozing off
-      if (m === 'idle' && !focusing && now - t > SLEEP_AFTER_MS) await setMode($, 'sleep')
+      if (m === 'idle' && !focusing && liveAgents.size === 0 && now - t > SLEEP_AFTER_MS) await setMode($, 'sleep')      // (not while helpers are still working: she is waiting for them)
       const lim = POSE_MS[m]
       if (lim !== undefined && now - t > lim) await setMode($, 'idle')
       // a turn that is still running counts as activity: otherwise one task longer than the 15 minute gap ends the stretch of work
@@ -1131,7 +1315,7 @@ export const register: Register = on => {
       if (ws > 0 && now - la > WORK_GAP_MS) {
         await update($, workStart, () => 0)
         await update($, remindDue, () => false)
-      } else if (ws > 0 && now >= nr && !(await read($, remindDue))) {
+      } else if (ws > 0 && now >= nr && !(await read($, remindDue)) && !(lastHuman > 0 && now - lastHuman >= AWAY_MS)) {
         demoRemind = false
         await update($, remindDue, () => true)
         $.ui.toast(say('rest', levelOf(await read($, affection)), now / 1000), { timeoutMs: LONG_TOAST_MS })
@@ -1145,6 +1329,7 @@ export const register: Register = on => {
         await update($, warnKind, () => '' as '' | '5h' | 'ctx')
         await update($, warnUntil, () => 0)
       }
+      if (liveAgents.size > 0) await quietly(() => reconcileAgents($, now))
     })
     // every minute: redraw so the countdowns move
     $.clock.every(60000, async () => {
@@ -1165,6 +1350,14 @@ export const register: Register = on => {
     await quietly(async () => {
       const now = await $.clock.now()
       if ((await read($, remindDue)) && !demoRemind) await bumpStats($, { ignored: 1 })      // the break reminder is on and the person carries on
+      if (!e.agentId) {
+        if (e.text !== '') await touched($)      // a prompt the person sent (not a continuation, not a subagent's run)
+        await update($, turnStart, () => now)
+        await update($, workKind, () => '' as WorkKind)
+        await update($, kindAt, () => 0)
+        blockedCalls = 0
+        await update($, blocked, () => false)
+      }
       const ws = await read($, workStart)
       const la = await read($, lastActive)
       if (ws === 0 || now - la > WORK_GAP_MS) {
@@ -1198,17 +1391,53 @@ export const register: Register = on => {
       await quietly(() => setMode($, 'work'))
       return r
     }
-    await quietly(() => setMode($, 'work'))
-    return next(e)
+    await quietly(async () => {
+      await setMode($, 'work')
+      if (!e.agentId) await noteKind($, kindOfTool(e.tool), await $.clock.now())      // her own tools only: a swarm's calls would make the face jump about
+    })
+    if (e.agentId || !AGENT_TOOLS.includes(e.tool)) return next(e)
+    // her own call to an agent tool: it stays open until the agents report, and that is waiting, not working
+    blockedCalls += 1
+    await quietly(() => update($, blocked, () => true))
+    try {
+      return await next(e)
+    } finally {
+      blockedCalls = Math.max(0, blockedCalls - 1)
+      await quietly(() => update($, blocked, () => blockedCalls > 0))
+    }
+  })
+
+  // Subagents and workflow agents: helpers beside her while they run, and a count of how many were sent and how many at once.
+  on('agent.spawn', async ($, e, next) => {
+    const r: any = await next(e)
+    await quietly(async () => {
+      const id = r && !r.deny ? (r.agentId as string | undefined) : undefined
+      if (!id) return
+      liveAgents.set(id, { at: await $.clock.now(), wf: !!e.workflow })
+      await agentsChanged($)
+      await bumpStats($, { agentsMade: e.resume ? 0 : 1, swarm: liveAgents.size })
+    })
+    return r
   })
 
   on('turn.complete', async ($, e, next) => {
-    if (e.agentId) return next(e)
+    if (e.agentId) {
+      const id = e.agentId
+      await quietly(async () => {
+        if (liveAgents.delete(id)) await agentsChanged($)
+      })
+      return next(e)
+    }
     const tools = toolsThisTurn
     toolsThisTurn = 0
     await quietly(async () => {
       const now = await $.clock.now()
       await update($, lastActive, () => now)
+      await update($, turnStart, () => 0)
+      await update($, workKind, () => '' as WorkKind)
+      await update($, kindAt, () => 0)
+      blockedCalls = 0
+      await update($, blocked, () => false)
       if (e.usage) {
         const u = e.usage
         const total = u.input_tokens + u.cache_read_input_tokens + u.cache_creation_input_tokens
@@ -1238,7 +1467,7 @@ export const register: Register = on => {
         await setMode($, 'done')
         await settleLater($, 'done')
         if (e.durationMs >= LONG_TURN_MS) {
-          const longLine = say('longDone', lvl, now / 1000, { m: Math.max(1, Math.round(e.durationMs / 60000)) })
+          const longLine = say('longDone', lvl, now / 1000, { d: fmtDur(e.durationMs) })
           $.ui.toast(longLine, { timeoutMs: LONG_TOAST_MS })
           await flash($, longLine, 'long', LONG_HOLD_MS)
         }
@@ -1351,10 +1580,29 @@ export const register: Register = on => {
     const be = await read($, breakEnd)
     if (rk === 'none' && quiet && (due || be > 0)) shown = 'rest'
     else if (rk === 'none' && m === 'idle' && fe > 0) shown = 'focus'
+    const kindNow = await read($, workKind)
+    const na = await read($, agentN)
+    // waiting for the helpers: her own call to an agent tool is still open, or the turn is over and agents keep going in the background
+    const blockedNow = await read($, blocked)
+    const waiting = rk === 'none' && !due && !warn && fe === 0 && be === 0 && ((blockedNow && (m === 'work' || m === 'think')) || (na > 0 && m === 'idle'))
+    if (waiting) shown = 'watch'
+    if (rk === 'none' && m === 'work' && KIND_SPRITE[kindNow]) shown = KIND_SPRITE[kindNow] as Sprite
 
     // the line: reactions first, then reminders and warnings, then the focus timer, then the state's own line
     let line = m === 'greet' ? '' : say(m, lvl, Math.floor(t / 1000))      // 'greet' has no line table: its text is chosen at start
     if (m === 'greet') line = (await read($, greetText)) || say('greetBack', lvl, 0)
+    else if (waiting) line = say('watch', lvl, Math.floor((await $.clock.now()) / 180000), { n: na })      // a new line every three minutes
+    else if (m === 'work') {
+      // what she is busy with, and (in a long run) for how long; a new line every three minutes, so hours of work do not show one sentence
+      const nowW = await $.clock.now()
+      const from = Math.max(await read($, kindAt), t)
+      const slot = Math.floor((nowW - from) / 180000)
+      const ts = await read($, turnStart)
+      const runMs = ts > 0 ? nowW - ts : 0
+      if (runMs >= LONG_RUN_MS && slot % 2 === 0) line = say('workLong', lvl, Math.floor(runMs / 180000), { d: fmtDur(runMs) })
+      else if (na >= 2) line = say('swarm', lvl, Math.floor(from / 1000) + slot, { n: na })
+      else line = say(T['work_' + kindNow] ? 'work_' + kindNow : 'work', lvl, Math.floor(from / 1000) + slot)
+    }
     else if (m === 'idle' && fe > 0) line = say('focusLine', lvl, Math.floor(t / 60000))
     if (quiet && be > 0) line = say('breakLine', lvl, Math.floor(t / 60000))
     if (quiet && warn) line = say(wk === '5h' ? 'warn5h' : 'warnCtx', lvl, Math.floor(wu / 60000))
@@ -1387,7 +1635,7 @@ export const register: Register = on => {
 
     // only the plain idle state takes on a mood: working, thinking, reactions, reminders, warnings and the timers keep their own face and line
     let asMood = false
-    if (m === 'idle' && rk === 'none' && !due && !warn && fe === 0 && be === 0) {
+    if (m === 'idle' && rk === 'none' && !due && !warn && fe === 0 && be === 0 && !waiting) {
       const mood = moodOf(now, await read($, moodKind), await read($, moodUntil), sameDay ? td.turns : 0)
       if (mood !== 'calm') {
         shown = MOOD_SPRITE[mood]
@@ -1464,12 +1712,13 @@ export const register: Register = on => {
       )
     }
 
+    const helpers = na > 0 ? await swarmLayer($, na) : ''
     const sprite = (await loadSprite($, shown)) || (await loadSprite($, 'work'))      // a pose whose picture is not drawn yet falls back to 'work'
 
     return (
       <Box flexDirection="column">
         <Box flexDirection="row" alignItems="center" gap={1} paddingX={1}>
-          <Svg source={petSvg(shown, sprite, asMood)} alt={`pet: ${shown}`} width={96} height={105} />
+          <Svg source={petSvg(shown, sprite, asMood, helpers)} alt={`pet: ${shown}`} width={96} height={105} />
           <Box flexDirection="column" gap={0}>
             <Svg source={barsSvg(c, f5, f7, faded)} alt="usage bars" width={262} height={64} />
             <Box flexDirection="row" gap={2}>

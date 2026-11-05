@@ -29,6 +29,11 @@ declare module 'claude-code' {
       flashSprite: Sprite
       greetText: string
       workStart: number
+      workKind: WorkKind
+      kindAt: number
+      turnStart: number
+      agentN: number
+      blocked: boolean
       lastActive: number
       nextRemind: number
       remindDue: boolean
@@ -47,8 +52,9 @@ declare module 'claude-code' {
   }
 }
 export type PetMode = 'idle' | 'work' | 'think' | 'wait' | 'done' | 'sleep' | 'worry' | 'greet' | 'compact'
-export type Sprite = PetMode | 'shy' | 'surprised' | 'proud' | 'heart' | 'long' | 'rest' | 'focus' | 'up0' | 'up1' | 'up2' | 'start' | 'giveup' | 'sleepy'
+export type Sprite = PetMode | 'shy' | 'surprised' | 'proud' | 'heart' | 'long' | 'rest' | 'focus' | 'up0' | 'up1' | 'up2' | 'start' | 'giveup' | 'sleepy' | 'read' | 'search' | 'web' | 'watch'
+export type WorkKind = '' | 'read' | 'search' | 'web' | 'edit' | 'run' | 'agent' | 'other'
 export type ReactKind = 'none' | 'pat' | 'poke' | 'flash'
 export type Today = { d: string; turns: number; tools: number; pats: number; focus: number; rests: number; pts: number }
-export type Stats = { turns: number; tools: number; pats: number; focus: number; night: number; longest: number; pokes: number; compacts: number; breaks: number; errors: number; wakes: number; bursts: number; ignored: number; recoveries: number; busyDays: number; comforts: number; peak: number }
+export type Stats = { turns: number; tools: number; pats: number; focus: number; night: number; longest: number; pokes: number; compacts: number; breaks: number; errors: number; wakes: number; bursts: number; ignored: number; recoveries: number; busyDays: number; comforts: number; peak: number; agentsMade: number; swarm: number }
 export type Streak = { last: string; n: number; max: number }

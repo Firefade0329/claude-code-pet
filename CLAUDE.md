@@ -16,7 +16,7 @@ Claude Code 输入框上方的女仆桌宠插件。公开仓库，MIT 协议；`
 - `hooks/hooks.json`：hooks 入口
 - `assets/`：各个姿势的图片（运行时按需读取）
 - `types/index.d.ts`：状态类型声明
-- `pet.test.ts`：自动化测试
+- `pet.test.ts`：自动化测试（母本在作者本机的 `pet\src\pet.test.ts`，这里是复制过来的；要改测试先改母本再复制，别只改这里）
 - `.claude-plugin/plugin.json`：插件清单（版本号、作者、协议；由构建脚本生成，不要手改）
 - `CHANGELOG.md`、`README.md`：更新记录和说明
 
@@ -30,7 +30,7 @@ claude plugin validate .
 claude plugin test .
 ```
 
-当前共 102 个测试（慢机器上 streak 和 busy days 两个测试已放宽超时），改动文档不需要跑。没有命令行就如实说“没有运行测试”，不要假装通过。
+当前共 122 个测试（慢机器上 streak 和 busy days 两个测试已放宽超时），改动文档不需要跑。没有命令行就如实说“没有运行测试”，不要假装通过。
 
 ## 回答问题时要知道的事实
 
