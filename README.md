@@ -154,7 +154,7 @@ claude plugin validate .   # 检查插件结构和 hooks
 claude plugin test .       # 运行 pet.test.ts（慢一点的机器上个别测试可能需要更久）
 ```
 
-目录说明：`hooks/register.tsx` 是主逻辑（构建产物），`assets/` 是各姿势的 WebP 图片（运行时按需读取），`types/index.d.ts` 是状态类型声明，`pet.test.ts` 是测试。
+目录说明：`hooks/register.tsx` 是主逻辑（构建产物），`assets/` 是各姿势的 WebP 图片（运行时按需读取），`types/index.d.ts` 是状态类型声明，`pet.test.ts` 是测试；`tools/` 是构建脚本（只读，方便审查；运行需要作者本机的模板和原图，见 `tools/README.md`）。
 
 ## 许可 / License
 
