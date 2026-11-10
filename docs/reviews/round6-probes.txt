@@ -1,0 +1,301 @@
+// Round-6 probes (review branch only). To run: copy the plugin (.claude-plugin, hooks, assets, types) into an empty
+// temporary folder, save this file there as probe.test.ts, and run `claude plugin test <that folder>`.
+// Each test asserts what the v0.6.0 code was SEEN to do, so a pass means the behaviour is still there.
+import { test, expect, mock } from 'claude-code/testing'
+
+// Probes for the round-6 review. Each test asserts what I EXPECT the current code to do;
+// a pass means the behaviour described in its name is real in the test environment.
+const PROPS = { hasSurvey: false, isWorking: false, maxRows: 20, bodyColumns: 120, scroll: { offset: 0, bodyRows: 20 }, view: {} } as any
+const mount = ($: any) => $.ui.mount({ plugin: 'pet', surface: 'desktop', component: 'AbovePrompt', props: PROPS })
+let gates: Record<string, Promise<void>> = {}
+async function engine($: any, on: any, entries?: Record<string, unknown>) {
+  const clock = mock.clock(on)
+  mock.store(on, entries)
+  on('ui.toast', () => ({ value: undefined } as any))
+  on('fs.read', () => ({ value: { base64: 'AAAA' } } as any))
+  on('session.start', () => ({ cwd: '/test' } as any))
+  on('turn.start', (_: any, e: any) => ({ turnId: e.turnId } as any))
+  on('turn.complete', () => ({ text: '' } as any))
+  on('tool.call', async (_: any, e: any) => {
+    if (gates[e.tool]) await gates[e.tool]
+    return { result: 'ok' } as any
+  })
+  on('classic.PermissionRequest', () => ({}))
+  await clock.set(new Date(2023, 10, 15, 15, 0).getTime())      // 15:00 local: no night mood
+  return clock
+}
+const count = async (m: any, text: RegExp | string) => (await m.findAll({ type: 'Text', text })).length
+const countBtn = async (m: any, text: RegExp | string) => (await m.findAll({ type: 'Button', text })).length
+const faces = async (m: any) => (await m.findAll({ type: 'Svg' })).map((n: any) => n.props.alt).filter((a: string) => a.startsWith('pet: '))
+const texts = async (m: any) => (await m.findAll({ type: 'Text' })).map((n: any) => String(n.props.children ?? n.text ?? '')).join(' | ')
+const callTool = ($: any, tool: string, args: Record<string, unknown> = {}) => $.tool.call({ tool, tool_use_id: 'k' + Math.random(), ...args } as any)
+let agentSeq = 0
+const withAgents = (on: any) => on('agent.spawn', () => ({ model: 'm', agentId: 'ag' + ++agentSeq } as any))
+const spawn = ($: any) => $.agent.spawn({ prompt: 'p', description: 'd' } as any)
+const endAgent = ($: any, id: string) => $.turn.complete({ reason: 'answer', answer: '', durationMs: 1000, isAborted: false, turnId: 'x' + id, agentId: id } as any)
+const finishTurn = async ($: any, clock: any, id: string) => {
+  await $.turn.start({ text: 'hi', turnId: id } as any)
+  await clock.advance(1000)
+  await $.turn.complete({ reason: 'answer', answer: '', durationMs: 1000, isAborted: false, turnId: id } as any)
+  await clock.advance(8000)
+}
+const READ_LINE = /查阅资料|翻阅相关文件|仔细阅读|逐份过目|看明白/
+const RUN_LINE = /执行命令|正在运行，请稍等|命令执行中|运行程序|正在验证/
+const WATCH_LINE = /等候汇报|尚在处理|等候结果|等待助手们|仍在办理|汇报|守着|没回来|做得怎么样|等消息|等他们|一有消息|一起等/
+
+// P1: background agents keep working after her own turn ended (Agent in the background, or a Workflow run)
+test('P1a: after the main turn, a background agent\'s first tool call turns her into a typist (no watch)', async ($, on) => {
+  agentSeq = 0
+  const clock = await engine($, on)
+  withAgents(on)
+  const m = await mount($)
+  await $.session.start({ source: 'startup', cwd: '/test' } as any)
+  await clock.advance(15000)
+  await finishTurn($, clock, 'main1')
+  await spawn($)
+  await spawn($)
+  await clock.advance(20000)
+  expect(await faces(m)).toEqual(['pet: watch'])      // as the 0.6.0 test shows
+  await $.turn.start({ text: 'p', turnId: 'a1', agentId: 'ag1' } as any)
+  await callTool($, 'Read', { file_path: '/x', agentId: 'ag1' })
+  await clock.advance(1000)
+  console.log('P1a faces after agent tool call:', JSON.stringify(await faces(m)))
+  expect(await faces(m)).toEqual(['pet: work'])
+})
+
+test('P1b: after the background agents have all ended she keeps typing: no idle, no sleep, ten minutes on', async ($, on) => {
+  agentSeq = 0
+  const clock = await engine($, on)
+  withAgents(on)
+  const m = await mount($)
+  await $.session.start({ source: 'startup', cwd: '/test' } as any)
+  await clock.advance(15000)
+  await finishTurn($, clock, 'main1')
+  await spawn($)
+  await $.turn.start({ text: 'p', turnId: 'a1', agentId: 'ag1' } as any)
+  await callTool($, 'Bash', { command: 'ls', agentId: 'ag1' })
+  await clock.advance(2000)
+  await endAgent($, 'ag1')
+  for (let i = 0; i < 10; i++) await clock.advance(60 * 1000)
+  console.log('P1b faces 10 min after the last agent ended:', JSON.stringify(await faces(m)))
+  expect(await faces(m)).toEqual(['pet: work'])
+})
+
+test('P1c: a Workflow call that returns at once (async_launched): the turn goes on/ends, the run\'s agents make her type', async ($, on) => {
+  agentSeq = 0
+  const clock = await engine($, on)
+  withAgents(on)
+  const m = await mount($)
+  await $.session.start({ source: 'startup', cwd: '/test' } as any)
+  await clock.advance(15000)
+  await $.turn.start({ text: 'run the workflow', turnId: 'wf' } as any)
+  await callTool($, 'Workflow', { script: 'x' })      // resolves at once, as status: async_launched does
+  await clock.advance(500)
+  await $.turn.complete({ reason: 'answer', answer: '', durationMs: 3000, isAborted: false, turnId: 'wf' } as any)
+  await clock.advance(8000)
+  await spawn($)
+  await spawn($)
+  await $.turn.start({ text: '', turnId: 'a1', agentId: 'ag1' } as any)
+  await callTool($, 'Grep', { pattern: 'x', agentId: 'ag1' })
+  await clock.advance(1000)
+  console.log('P1c faces:', JSON.stringify(await faces(m)), 'lines:', await texts(m))
+  expect(await faces(m)).toEqual(['pet: work'])
+})
+
+// P2: the 1.5 s hold drops a kind for good when no later call comes
+test('P2a: Read, then Bash 1 s later and nothing more: five minutes later she still shows the reading pose and line', async ($, on) => {
+  const clock = await engine($, on)
+  const m = await mount($)
+  await $.session.start({ source: 'startup', cwd: '/test' } as any)
+  await $.turn.start({ text: 'go', turnId: 'h1' } as any)
+  await clock.advance(15000)
+  await callTool($, 'Read', { file_path: '/x' })
+  await clock.advance(1000)
+  const long = callTool($, 'Bash', { command: 'make' })      // a long build
+  for (let i = 0; i < 5; i++) await clock.advance(60 * 1000)
+  console.log('P2a faces:', JSON.stringify(await faces(m)), 'read line:', await count(m, READ_LINE), 'run line:', await count(m, RUN_LINE))
+  expect(await faces(m)).toEqual(['pet: read'])
+  expect(await count(m, READ_LINE)).toBe(1)
+  await long
+})
+
+test('P2b: Read, then her Agent call 0.5 s later (held open): the reading face with a waiting line', async ($, on) => {
+  agentSeq = 0
+  let release: () => void = () => {}
+  const clock = await engine($, on)
+  gates = { Agent: new Promise<void>(r => { release = r }) }
+  withAgents(on)
+  const m = await mount($)
+  await $.turn.start({ text: 'go', turnId: 'h2' } as any)
+  await clock.advance(15000)
+  await callTool($, 'Read', { file_path: '/x' })
+  await clock.advance(500)
+  const open = callTool($, 'Agent', { prompt: 'p', description: 'd' })
+  await clock.advance(100)
+  await spawn($)
+  await clock.advance(2000)
+  console.log('P2b faces:', JSON.stringify(await faces(m)), 'watch line:', await count(m, WATCH_LINE))
+  expect(await faces(m)).toEqual(['pet: read'])
+  expect(await count(m, WATCH_LINE)).toBe(1)
+  release()
+  await open
+  gates = {}
+})
+
+// P3: in a long run whose tool kind changes now and then, how often is the long-run line shown?
+test('P3: long run, the kind changes every 2 minutes: share of minutes 21-60 that show the long-run line', async ($, on) => {
+  const clock = await engine($, on)
+  const m = await mount($)
+  await $.session.start({ source: 'startup', cwd: '/test' } as any)
+  await $.turn.start({ text: 'big', turnId: 'L' } as any)
+  await clock.advance(15000)
+  const tools = ['Read', 'Bash', 'Grep', 'Edit']
+  let longCount = 0
+  let samples = 0
+  for (let minute = 1; minute <= 60; minute++) {
+    if (minute % 2 === 0) await callTool($, tools[(minute / 2) % 4], {})
+    await clock.advance(60 * 1000)
+    if (minute > 21) {
+      samples += 1
+      if ((await count(m, /\d+ 分钟|小时/)) > 0) longCount += 1
+    }
+  }
+  console.log('P3 long-run line shown in', longCount, 'of', samples, 'sampled minutes')
+  expect(longCount).toBe(samples)
+})
+
+test('P3b: long run, the kind changes every 4 minutes', async ($, on) => {
+  const clock = await engine($, on)
+  const m = await mount($)
+  await $.session.start({ source: 'startup', cwd: '/test' } as any)
+  await $.turn.start({ text: 'big', turnId: 'L' } as any)
+  await clock.advance(15000)
+  const tools = ['Read', 'Bash', 'Grep', 'Edit']
+  let longCount = 0
+  let samples = 0
+  for (let minute = 1; minute <= 60; minute++) {
+    if (minute % 4 === 0) await callTool($, tools[(minute / 4) % 4], {})
+    await clock.advance(60 * 1000)
+    if (minute > 21) {
+      samples += 1
+      if ((await count(m, /\d+ 分钟|小时/)) > 0) longCount += 1
+    }
+  }
+  console.log('P3b long-run line shown in', longCount, 'of', samples, 'sampled minutes')
+  expect(longCount).toBeGreaterThan(0)
+})
+
+// P4: waiting with no helper counted: the "{n} 位助手" line says 0
+test('P4: her Agent call is open before any agent.spawn arrived: a waiting line may say "0 位助手"', async ($, on) => {
+  let release: () => void = () => {}
+  const clock = await engine($, on)
+  gates = { Agent: new Promise<void>(r => { release = r }) }
+  const m = await mount($)
+  await $.session.start({ source: 'startup', cwd: '/test' } as any)
+  await $.turn.start({ text: 'go', turnId: 'z' } as any)
+  await clock.advance(15000)
+  const open = callTool($, 'Agent', { prompt: 'p', description: 'd' })
+  let zero = 0
+  for (let i = 0; i < 15; i++) {
+    await clock.advance(3 * 60 * 1000)
+    if ((await count(m, /0 位助手/)) > 0) zero += 1
+  }
+  console.log('P4 "0 位助手" seen in', zero, 'of 15 three-minute slots; faces', JSON.stringify(await faces(m)))
+  expect(zero).toBeGreaterThan(0)
+  release()
+  await open
+  gates = {}
+})
+
+// P5: a subagent's turn.start runs the main loop's bookkeeping
+test('P5a: a background agent starting its turn ends her 5 minute break', async ($, on) => {
+  const clock = await engine($, on)
+  const m = await mount($)
+  await $.ui.press({ plugin: 'pet', key: 'focus' })
+  await clock.advance(26 * 60 * 1000)
+  expect(await countBtn(m, /结束休息/)).toBe(1)
+  await $.turn.start({ text: 'p', turnId: 'sa', agentId: 'agX' } as any)
+  console.log('P5a break button after an agent turn.start:', await countBtn(m, /结束休息/))
+  expect(await countBtn(m, /结束休息/)).toBe(0)
+})
+
+test('P5b: five agent turns starting while the real reminder is on unlock 不听劝', async ($, on) => {
+  const clock = await engine($, on)
+  const m = await mount($)
+  await $.session.start({ source: 'startup', cwd: '/test' } as any)
+  await $.turn.start({ text: 'hi', turnId: 'w0' } as any)
+  for (let i = 0; i < 7; i++) {
+    await clock.advance(10 * 60 * 1000)
+    if (i === 3) await $.ui.press({ plugin: 'pet', key: 'pat' })
+  }
+  await clock.advance(30000)
+  expect(await countBtn(m, /知道啦/)).toBe(1)
+  for (let i = 0; i < 5; i++) await $.turn.start({ text: 'p', turnId: 'sub' + i, agentId: 'ag' + i } as any)
+  await $.ui.press({ plugin: 'pet', key: 'ach' })
+  await $.ui.press({ plugin: 'pet', key: 'ag-secret' })
+  const got = await count(m, /✓ 不听劝/)
+  console.log('P5b 不听劝 unlocked by agent turns:', got)
+  expect(got).toBe(1)
+})
+
+// P6: the idle-teammate status: an agent listed as 'idle' is struck off after the grace
+test('P6: an agent the list shows as idle (a teammate between turns) loses its helper after a minute', async ($, on) => {
+  agentSeq = 0
+  const clock = await engine($, on)
+  withAgents(on)
+  on('agent.list', () => ({ value: [{ id: 'ag1', status: 'idle', description: 'd', type: 'teammate' }] }) as any)
+  const m = await mount($)
+  await $.session.start({ source: 'startup', cwd: '/test' } as any)
+  await finishTurn($, clock, 't')
+  await spawn($)
+  await clock.advance(20000)
+  const before = JSON.stringify(await faces(m))
+  await clock.advance(100000)
+  console.log('P6 faces before / after:', before, JSON.stringify(await faces(m)))
+  expect(await faces(m)).not.toEqual(['pet: watch'])
+})
+const imagesIn = async (m: any) => ((((await m.findAll({ type: 'Svg' })).find((n: any) => n.props.alt.startsWith('pet: ')) as any).props.source as string).match(/<image /g) ?? []).length
+const REST = /连续工作一小时|休息一下对身体好|已工作一小时/
+
+test('P7: a background agent after her turn keeps the stretch of work alive through a 20 minute absence: the reminder comes right after the person returns', async ($, on) => {
+  agentSeq = 0
+  const clock = await engine($, on)
+  withAgents(on)
+  const m = await mount($)
+  await $.session.start({ source: 'startup', cwd: '/test' } as any)
+  await $.turn.start({ text: 'start', turnId: 'm0' } as any)      // T0: a stretch of work starts, reminder due at T0+60
+  for (let i = 0; i < 3; i++) { await clock.advance(10 * 60 * 1000); if (i === 2) await $.ui.press({ plugin: 'pet', key: 'pat' }) }      // T0+30: the person is there (a pat), so the 45-minute rule does not apply below
+  await $.turn.complete({ reason: 'answer', answer: '', durationMs: 30 * 60000, isAborted: false, turnId: 'm0' } as any)      // T0+30
+  await spawn($)
+  await $.turn.start({ text: 'p', turnId: 'a1', agentId: 'ag1' } as any)
+  await callTool($, 'Read', { file_path: '/x', agentId: 'ag1' })
+  await clock.advance(60 * 1000)
+  await endAgent($, 'ag1')      // T0+31: nothing runs any more
+  for (let i = 0; i < 4; i++) await clock.advance(5 * 60 * 1000)      // T0+51: twenty quiet minutes (more than the 15 minute gap)
+  await $.turn.start({ text: 'back', turnId: 'm1' } as any)
+  await clock.advance(10 * 60 * 1000 + 30000)      // T0+61.5
+  const shown = await count(m, REST)
+  console.log('P7 reminder 10 minutes after coming back from a 20 minute break:', shown)
+  expect(shown).toBe(1)
+})
+
+test('P8: agents that start and end at the same moment: does the helper count stay right?', async ($, on) => {
+  agentSeq = 0
+  const clock = await engine($, on)
+  withAgents(on)
+  const m = await mount($)
+  await $.turn.start({ text: 'go', turnId: 's' } as any)
+  await clock.advance(15000)
+  const base = await imagesIn(m)
+  const bad: string[] = []
+  await spawn($); await spawn($)      // ag1 ag2
+  await Promise.all([endAgent($, 'ag1'), endAgent($, 'ag2')])
+  if ((await imagesIn(m)) !== base) bad.push('A ' + ((await imagesIn(m)) - base))
+  await spawn($); await spawn($)      // ag3 ag4
+  await Promise.all([spawn($), endAgent($, 'ag3')])      // ag5 in, ag3 out: 2 left
+  if ((await imagesIn(m)) !== base + 2) bad.push('B ' + ((await imagesIn(m)) - base))
+  await Promise.all([endAgent($, 'ag4'), spawn($), endAgent($, 'ag5')])      // ag6 in: 1 left
+  if ((await imagesIn(m)) !== base + 1) bad.push('C ' + ((await imagesIn(m)) - base))
+  console.log('P8 mismatches:', JSON.stringify(bad))
+  expect(true).toBe(true)
+})
