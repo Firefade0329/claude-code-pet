@@ -143,15 +143,16 @@ const TOOL_KIND: Record<string, WorkKind> = {
   WebSearch: 'web', WebFetch: 'web',
   Edit: 'edit', MultiEdit: 'edit', Write: 'edit', NotebookEdit: 'edit',
   Bash: 'run', PowerShell: 'run', BashOutput: 'run',
-  Agent: 'agent', Task: 'agent',
+  Agent: 'agent', Task: 'agent', Workflow: 'agent',
 }
 // the kinds that have a picture of their own; the others keep the typing pose
 const KIND_SPRITE: Partial<Record<WorkKind, Sprite>> = { read: 'read', search: 'search', web: 'web' }
 const FOCUS_MS = 25 * 60 * 1000
-const BUILD_INFO = 'v0.6.0 · built 2026-11-04 19:08'      // filled in by build.py: tells which build a conversation has loaded (/pet version)
+const BUILD_INFO = 'v0.6.1 · built 2026-11-10 13:08'      // filled in by build.py: tells which build a conversation has loaded (/pet version)
 let demoRemind = false      // true while the reminder on screen comes from the /pet rest demo (continuing is not counted)
 let moodDemoUntil = 0      // end time of a mood shown by the /pet mood demo (a demo worry is not a real worry: no recovery, no comfort is counted)
 let demoBreakEnd = 0      // end time of a break started by the /pet break demo
+let autoPromptAt = 0      // the last time a prompt came that no person typed (a background task's notification, a scheduled task, another session)
 let blockedCalls = 0      // how many of her own agent-tool calls are open
 let lastHuman = 0      // the last time the person did something here (a prompt, a click on her); 0: not yet
 const liveAgents = new Map<string, { at: number; wf: boolean }>()      // agents started here that have not ended yet
@@ -802,7 +803,7 @@ const kindOfTool = (tool: string): WorkKind => TOOL_KIND[tool] ?? 'other'
 // Little helpers beside her, one for each agent that is running (up to four; more are a number in the corner).
 // They are four little creatures of their own (typing, reading, searching, web; one picture, source/helpers.webp), bobbing a little out of step with each other.
 const MINI_POSE = ['work', 'read', 'search', 'web']
-const MINI_SLOTS: number[][] = [[-4, 156], [149, 156], [-4, 96], [149, 96]]      // x, y of each helper in the 201 x 220 picture (a helper is 56 x 62)
+const MINI_SLOTS: number[][] = [[0, 156], [145, 156], [0, 96], [145, 96]]      // x, y of each helper in the 201 x 220 picture (a helper is 56 x 62)
 async function swarmLayer($: any, n: number): Promise<string> {
   let out = ''
   for (let i = 0; i < Math.min(n, MINI_SLOTS.length); i++) {
@@ -816,8 +817,7 @@ async function swarmLayer($: any, n: number): Promise<string> {
 }
 
 async function agentsChanged($: any) {
-  const n = liveAgents.size
-  if ((await read($, agentN)) !== n) await update($, agentN, () => n)
+  await update($, agentN, () => liveAgents.size)      // (taken at the moment of writing: several agents may start and end at once)
 }
 
 // Agents are struck off when their own turn ends. A background agent can outlive the main turn, and an agent that was killed never
@@ -843,11 +843,20 @@ async function reconcileAgents($: any, now: number) {
 
 // What the working pose is about. Tool calls come in bursts (a read, a search, an edit within seconds): a new kind is taken up only
 // when the current one has been on screen for KIND_HOLD_MS, so the face does not flicker between them.
-async function noteKind($: any, kind: WorkKind, now: number) {
-  if ((await read($, workKind)) === kind) return
-  if (now - (await read($, kindAt)) < KIND_HOLD_MS) return
+let kindToken = 0      // numbers the calls: of those that had to wait for the hold, only the newest is taken up when it ends
+async function setKind($: any, kind: WorkKind, now: number) {
   await update($, kindAt, () => now)      // `kindAt` first, as with `since`: the redraw must not see the new kind with the old time
   await update($, workKind, () => kind)
+}
+async function noteKind($: any, kind: WorkKind, now: number) {
+  const token = ++kindToken
+  if ((await read($, workKind)) === kind) return      // (and any older call that was still waiting is forgotten)
+  const wait = KIND_HOLD_MS - (now - (await read($, kindAt)))
+  if (wait <= 0) return setKind($, kind, now)
+  $.clock.after(wait + 20, async () => {      // a long command right after a read: she is on the command, not still on the read
+    if (token !== kindToken || (await read($, turnStart)) === 0) return
+    await quietly(async () => setKind($, kind, await $.clock.now()))
+  })
 }
 
 // The person did something here (sent a prompt, clicked on her). After a long silence while a turn ran on alone, the stretch of work
@@ -1346,12 +1355,23 @@ export const register: Register = on => {
     return { text: await demo($, (e.args ?? '').trim()) }
   })
 
+  // A prompt that no person typed (a background task's notification, a scheduled task, another session) is not "you came back".
+  on('prompt.submit', async ($, e, next) => {
+    const kind = e.origin ? e.origin.kind : undefined
+    if (kind !== undefined && kind !== 'composer' && kind !== 'bridge') autoPromptAt = await $.clock.now()
+    return next(e)
+  })
+
   on('turn.start', async ($, e, next) => {
+    if (e.agentId) return next(e)      // a subagent's run is not her turn: it must not end her break, count as "carrying on", or change what she is doing
     await quietly(async () => {
       const now = await $.clock.now()
-      if ((await read($, remindDue)) && !demoRemind) await bumpStats($, { ignored: 1 })      // the break reminder is on and the person carries on
+      // a prompt the person typed (not a continuation, not one that came by itself); first, so that coming back after a long absence does not count as ignoring a reminder
+      const typed = e.text !== '' && !(now - autoPromptAt < 3000)
+      if (typed) await touched($)
+      if (typed && (await read($, remindDue)) && !demoRemind) await bumpStats($, { ignored: 1 })      // the break reminder is on and the person carries on (a turn the person did not start is not carrying on)
       if (!e.agentId) {
-        if (e.text !== '') await touched($)      // a prompt the person sent (not a continuation, not a subagent's run)
+        kindToken += 1
         await update($, turnStart, () => now)
         await update($, workKind, () => '' as WorkKind)
         await update($, kindAt, () => 0)
@@ -1392,8 +1412,12 @@ export const register: Register = on => {
       return r
     }
     await quietly(async () => {
-      await setMode($, 'work')
-      if (!e.agentId) await noteKind($, kindOfTool(e.tool), await $.clock.now())      // her own tools only: a swarm's calls would make the face jump about
+      if (!e.agentId) {
+        await setMode($, 'work')
+        await noteKind($, kindOfTool(e.tool), await $.clock.now())      // her own tools only: a swarm's calls would make the face jump about
+      } else if ((await read($, mode)) === 'wait') {
+        await setMode($, (await read($, turnStart)) > 0 ? 'work' : 'idle')      // a helper's permission was answered: the waiting is over, but the helper's work is not hers
+      }
     })
     if (e.agentId || !AGENT_TOOLS.includes(e.tool)) return next(e)
     // her own call to an agent tool: it stays open until the agents report, and that is waiting, not working
@@ -1436,6 +1460,7 @@ export const register: Register = on => {
       await update($, turnStart, () => 0)
       await update($, workKind, () => '' as WorkKind)
       await update($, kindAt, () => 0)
+      kindToken += 1
       blockedCalls = 0
       await update($, blocked, () => false)
       if (e.usage) {
@@ -1586,18 +1611,18 @@ export const register: Register = on => {
     const blockedNow = await read($, blocked)
     const waiting = rk === 'none' && !due && !warn && fe === 0 && be === 0 && ((blockedNow && (m === 'work' || m === 'think')) || (na > 0 && m === 'idle'))
     if (waiting) shown = 'watch'
-    if (rk === 'none' && m === 'work' && KIND_SPRITE[kindNow]) shown = KIND_SPRITE[kindNow] as Sprite
+    if (rk === 'none' && m === 'work' && !waiting && KIND_SPRITE[kindNow]) shown = KIND_SPRITE[kindNow] as Sprite
 
     // the line: reactions first, then reminders and warnings, then the focus timer, then the state's own line
     let line = m === 'greet' ? '' : say(m, lvl, Math.floor(t / 1000))      // 'greet' has no line table: its text is chosen at start
     if (m === 'greet') line = (await read($, greetText)) || say('greetBack', lvl, 0)
-    else if (waiting) line = say('watch', lvl, Math.floor((await $.clock.now()) / 180000), { n: na })      // a new line every three minutes
+    else if (waiting) line = say('watch', lvl, Math.floor((await $.clock.now()) / 180000), { n: na > 0 ? na : '几' })      // a new line every three minutes
     else if (m === 'work') {
       // what she is busy with, and (in a long run) for how long; a new line every three minutes, so hours of work do not show one sentence
       const nowW = await $.clock.now()
       const from = Math.max(await read($, kindAt), t)
-      const slot = Math.floor((nowW - from) / 180000)
       const ts = await read($, turnStart)
+      const slot = Math.floor((nowW - (ts > 0 ? ts : from)) / 180000)      // (from the start of the turn: a change of kind must not start the count again)
       const runMs = ts > 0 ? nowW - ts : 0
       if (runMs >= LONG_RUN_MS && slot % 2 === 0) line = say('workLong', lvl, Math.floor(runMs / 180000), { d: fmtDur(runMs) })
       else if (na >= 2) line = say('swarm', lvl, Math.floor(from / 1000) + slot, { n: na })

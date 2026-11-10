@@ -4,7 +4,8 @@ const PROPS = { hasSurvey: false, isWorking: false, maxRows: 20, bodyColumns: 12
 const mount = ($: any, surface: 'desktop' | 'terminal') => $.ui.mount({ plugin: 'pet', surface, component: 'AbovePrompt', props: PROPS })
 
 let toastSink: string[] | null = null
-let toolGate: Promise<void> | null = null      // a test sets it to keep a call to the Agent tool open until it opens the gate
+let toolGate: Promise<void> | null = null
+let releaseGate: () => void = () => {}      // a test sets it to keep a call to the Agent tool open until it opens the gate
 // everything beneath the plugin that a real session would answer
 async function engine($: any, on: any, entries?: Record<string, unknown>) {
   const clock = mock.clock(on)
@@ -13,6 +14,7 @@ async function engine($: any, on: any, entries?: Record<string, unknown>) {
   on('fs.read', () => ({ value: { base64: 'AAAA' } } as any))
   on('session.start', () => ({ cwd: '/test' } as any))
   on('turn.start', (_: any, e: any) => ({ turnId: e.turnId } as any))
+  on('prompt.submit', (_: any, e: any) => ({ text: e.text } as any))
   on('turn.complete', () => ({ text: '' } as any))
   on('tool.call', async (_: any, e: any) => {
     if (toolGate && e.tool === 'Agent') await toolGate
@@ -748,7 +750,7 @@ test('summary: shows today\'s points', async ($, on) => {
   expect(await heartOf(m, /今日心意 \+4/)).toBe(1)      // 1 for the turn + 3 for "first"
 })
 
-test('achievement rewards are scaled: the total is about a seventh of what Lv.20 needs', async ($, on) => {
+test('achievement rewards are scaled: the total is about a sixth of what Lv.20 needs', async ($, on) => {
   await engine($, on, { achieved: [] })
   await mount($, 'desktop')
   // the same arithmetic as the code: Math.round(rw * 1.3) over the 44 base rewards
@@ -1230,6 +1232,8 @@ test('tools: a burst of calls does not make the face flicker; the next kind is t
   await callTool($, 'WebFetch', { url: 'https://example.com' })
   expect(await faces(m)).toEqual(['pet: read'])
   await clock.advance(1000)
+  expect(await faces(m)).toEqual(['pet: web'])      // the newest call of the burst, taken up when the hold ended
+  await clock.advance(1600)
   await callTool($, 'Grep', { pattern: 'x' })
   expect(await faces(m)).toEqual(['pet: search'])
 })
@@ -1273,17 +1277,17 @@ test('long run: after twenty minutes the working line also says how long it has 
   await $.turn.start({ text: 'big', turnId: 'k5' } as any)
   await clock.advance(15000)
   await callTool($, 'Bash', { command: 'ls' })
-  // The line changes every three minutes; from the twentieth minute every other one is the long line (counted from the tool call).
-  for (let i = 0; i < 8; i++) await clock.advance(3 * 60 * 1000)      // 24 minutes in: still what she is doing
+  // The line changes every three minutes, counted from the start of the turn; from the twentieth minute every other one is the long line.
+  for (let i = 0; i < 8; i++) await clock.advance(3 * 60 * 1000)      // 24 minutes in (slot 8, even): how long it has been going
+  expect(await count(m, /24 分钟/)).toBe(1)
+  await clock.advance(3 * 60 * 1000)      // 27 minutes in (slot 9): what she is doing
   expect(await count(m, RUN_LINE)).toBe(1)
   expect(await count(m, /分钟|小时/)).toBe(0)
-  await clock.advance(3 * 60 * 1000)      // 27 minutes in: how long it has been going
-  expect(await count(m, /目前已 27 分钟|27 分钟|已经跑了 27|27 分钟了/)).toBe(1)
-  await clock.advance(3 * 60 * 1000)      // 30 minutes in: what she is doing again
-  expect(await count(m, /分钟|小时/)).toBe(0)
-  for (let i = 0; i < 10; i++) await clock.advance(15 * 60 * 1000)      // 180 minutes after the call...
-  await clock.advance(3 * 60 * 1000)      // ...and one more slot: 3 hours 3 minutes in (a long-line slot)
-  expect(await count(m, /3 小时 3 分/)).toBe(1)
+  await clock.advance(3 * 60 * 1000)      // 30 minutes in (slot 10): how long again
+  expect(await count(m, /30 分钟/)).toBe(1)
+  for (let i = 0; i < 10; i++) await clock.advance(15 * 60 * 1000)      // 180 minutes in (slot 60, even): said in hours
+  expect(await count(m, /3 小时/)).toBe(1)
+  expect(await count(m, /\d+ 分钟/)).toBe(0)
 })
 
 test('long run: a finished long turn says its time in hours', async ($, on) => {
@@ -1306,7 +1310,8 @@ test('demo: /pet read shows the reading pose and one of its lines', async ($, on
 
 // ---------- subagents and workflows (0.6.0) ----------
 let agentSeq = 0
-const withAgents = (on: any) => on('agent.spawn', () => ({ model: 'm', agentId: 'ag' + ++agentSeq } as any))
+let agentDeny = false
+const withAgents = (on: any) => on('agent.spawn', () => (agentDeny ? ({ deny: 'no' } as any) : ({ model: 'm', agentId: 'ag' + ++agentSeq } as any)))
 const spawn = ($: any) => $.agent.spawn({ prompt: 'p', description: 'd' } as any)
 const endAgent = ($: any, id: string) => $.turn.complete({ reason: 'answer', answer: '', durationMs: 1000, isAborted: false, turnId: 'x' + id, agentId: id } as any)
 const imagesIn = async (m: any) => ((((await m.findAll({ type: 'Svg' })).find((n: any) => n.props.alt.startsWith('pet: ')) as any).props.source as string).match(/<image /g) ?? []).length
@@ -1429,15 +1434,18 @@ test('watch: her own call to an agent tool is open and the helpers work on: she 
   await $.turn.start({ text: 'go', turnId: 'w1' } as any)
   await clock.advance(15000)
   const open = callTool($, 'Agent', { prompt: 'p', description: 'd', subagent_type: 'general-purpose' })      // stays open until the agents are done
-  await clock.advance(100)
-  await spawn($)
-  await spawn($)
-  await callTool($, 'Read', { file_path: '/x', agentId: 'ag1' })      // a helper works: that must not turn her into a typist
-  expect(await faces(m)).toEqual(['pet: watch'])
-  expect(await count(m, WATCH_LINE)).toBe(1)
-  release()
-  await open
-  toolGate = null
+  try {
+    await clock.advance(100)
+    await spawn($)
+    await spawn($)
+    await callTool($, 'Read', { file_path: '/x', agentId: 'ag1' })      // a helper works: that must not turn her into a typist
+    expect(await faces(m)).toEqual(['pet: watch'])
+    expect(await count(m, WATCH_LINE)).toBe(1)
+  } finally {
+    release()
+    await open
+    toolGate = null
+  }
   await clock.advance(5000)
   await callTool($, 'Bash', { command: 'ls' })      // the call is over; her own work again
   expect(await faces(m)).toEqual(['pet: work'])
@@ -1469,4 +1477,196 @@ test('demo: /pet watch shows the waiting pose and one of its lines', async ($, o
   expect(await faces(m)).toEqual(['pet: watch'])
   expect(await count(m, WATCH_LINE)).toBe(1)
   expect(await imagesIn(m)).toBe(2)      // her picture and the closed-eye patch: this pose blinks too
+})
+
+// ---------- round 6 (0.6.1) ----------
+test('watch: background agents that use tools after her turn ended: she waits, and settles when they are done', async ($, on) => {
+  agentSeq = 0
+  const clock = await engine($, on)
+  withAgents(on)
+  const m = await mount($, 'desktop')
+  await $.session.start({ source: 'startup', cwd: '/test' } as any)
+  await finishTurn($, clock, 'bg1')
+  await spawn($)
+  await clock.advance(20000)
+  await $.turn.start({ text: 'p', turnId: 'a1', agentId: 'ag1' } as any)
+  await callTool($, 'Read', { file_path: '/x', agentId: 'ag1' })
+  expect(await faces(m)).toEqual(['pet: watch'])
+  await endAgent($, 'ag1')
+  for (let i = 0; i < 12; i++) await clock.advance(30000)
+  expect(await faces(m)).toEqual(['pet: sleep'])
+})
+
+test('watch: a workflow that returns at once, then its agents work: she waits (the call is over, the turn is over)', async ($, on) => {
+  agentSeq = 0
+  const clock = await engine($, on)
+  withAgents(on)
+  const m = await mount($, 'desktop')
+  await $.session.start({ source: 'startup', cwd: '/test' } as any)
+  await $.turn.start({ text: 'run it', turnId: 'wf1' } as any)
+  await clock.advance(15000)
+  await callTool($, 'Workflow', { script: 'x' })      // comes back at once: the workflow runs in the background
+  expect(await faces(m)).toEqual(['pet: work'])
+  await $.turn.complete({ reason: 'answer', answer: '', durationMs: 1000, isAborted: false, turnId: 'wf1' } as any)
+  await spawn($)
+  await spawn($)
+  await clock.advance(12000)
+  await callTool($, 'Grep', { pattern: 'x', agentId: 'ag1' })
+  expect(await faces(m)).toEqual(['pet: watch'])
+})
+
+test('subagents: their runs do not count as carrying on after a reminder (no 不听劝) and do not end a break', async ($, on) => {
+  agentSeq = 0
+  const clock = await engine($, on)
+  withAgents(on)
+  const m = await mount($, 'desktop')
+  await $.session.start({ source: 'startup', cwd: '/test' } as any)
+  await $.turn.start({ text: 'hi', turnId: 'w0' } as any)
+  for (let i = 0; i < 7; i++) {
+    await clock.advance(10 * 60 * 1000)
+    if (i === 3) await $.ui.press({ plugin: 'pet', key: 'pat' })
+  }
+  await clock.advance(30000)
+  expect(await countBtn(m, /知道啦/)).toBe(1)      // the reminder is on
+  for (let i = 0; i < 6; i++) await $.turn.start({ text: 'sub', turnId: 'sa' + i, agentId: 'ag' + i } as any)
+  await press($, 'ach')
+  await press($, 'ag-secret')
+  expect(await hasText(m, /✓ 不听劝/)).toBe(false)
+  expect(await countBtn(m, /知道啦/)).toBe(1)      // and it stays on
+})
+
+test('tools: a long command right after a read: she is on the command, not still on the read', async ($, on) => {
+  const clock = await engine($, on)
+  const m = await mount($, 'desktop')
+  await $.turn.start({ text: 'go', turnId: 'k8' } as any)
+  await clock.advance(15000)
+  await callTool($, 'Read', { file_path: '/x' })
+  expect(await faces(m)).toEqual(['pet: read'])
+  await clock.advance(500)
+  await callTool($, 'Bash', { command: 'sleep 60' })
+  await clock.advance(1500)
+  expect(await faces(m)).toEqual(['pet: work'])
+})
+
+test('watch: the reading pose does not cover the waiting pose', async ($, on) => {
+  agentSeq = 0
+  const gate = new Promise<void>(r => { releaseGate = r })
+  const clock = await engine($, on)
+  withAgents(on)
+  const m = await mount($, 'desktop')
+  await $.turn.start({ text: 'go', turnId: 'k9' } as any)
+  await clock.advance(15000)
+  await callTool($, 'Read', { file_path: '/x' })
+  toolGate = gate
+  const open = callTool($, 'Agent', { prompt: 'p', description: 'd', subagent_type: 'general-purpose' })
+  try {
+    await clock.advance(100)
+    expect(await faces(m)).toEqual(['pet: watch'])      // (the read is still the kind on screen: the hold has not ended)
+  } finally {
+    releaseGate()
+    await open
+    toolGate = null
+  }
+})
+
+test('long run: the long line and the working line alternate every three minutes even when the tool kind changes every two', { timeoutMs: 60000 }, async ($, on) => {
+  const clock = await engine($, on)
+  const m = await mount($, 'desktop')
+  await $.session.start({ source: 'startup', cwd: '/test' } as any)
+  await $.turn.start({ text: 'big', turnId: 'k10' } as any)
+  const longNow = async () => (await count(m, /\d+ 分钟|小时/)) > 0
+  let minute = 0
+  const toMinute = async (to: number, tool: string, args: Record<string, unknown>) => {
+    while (minute < to) { await clock.advance(60000); minute += 1 }
+    await callTool($, tool, args)
+  }
+  await toMinute(2, 'Read', { file_path: '/x' })
+  for (let m2 = 4; m2 <= 20; m2 += 2) await toMinute(m2, m2 % 4 === 0 ? 'Bash' : 'Read', m2 % 4 === 0 ? { command: 'ls' } : { file_path: '/x' })
+  await clock.advance(60000)      // minute 21: the third-minute slot 7 (odd): what she is doing
+  expect(await longNow()).toBe(false)
+  await toMinute(24, 'Bash', { command: 'ls' })      // minute 24: slot 8 (even): how long
+  expect(await longNow()).toBe(true)
+  await toMinute(27, 'Read', { file_path: '/x' })      // minute 27: slot 9: what she is doing again
+  expect(await longNow()).toBe(false)
+})
+
+test('swarm: several agents ending and starting at the same moment leave the right number of helpers', async ($, on) => {
+  agentSeq = 0
+  const clock = await engine($, on)
+  withAgents(on)
+  const m = await mount($, 'desktop')
+  await $.turn.start({ text: 'go', turnId: 's9' } as any)
+  await clock.advance(15000)
+  const base = await imagesIn(m)
+  for (let i = 0; i < 5; i++) await spawn($)
+  for (const id of ['ag1', 'ag2', 'ag3']) await endAgent($, id)
+  expect(await imagesIn(m)).toBe(base + 2)      // ag4 and ag5 are left
+  await Promise.all([endAgent($, 'ag4'), spawn($), endAgent($, 'ag5')])
+  expect(await imagesIn(m)).toBe(base + 1)      // only ag6
+})
+
+test('swarm: a refused spawn draws no helper and counts nothing', async ($, on) => {
+  agentSeq = 0
+  const clock = await engine($, on, { achieved: [], model: 2, stats: { agentsMade: 9 } })
+  withAgents(on)
+  const m = await mount($, 'desktop')
+  await $.turn.start({ text: 'go', turnId: 's10' } as any)
+  await clock.advance(15000)
+  const base = await imagesIn(m)
+  agentDeny = true
+  try {
+    await spawn($)
+  } finally {
+    agentDeny = false
+  }
+  expect(await imagesIn(m)).toBe(base)
+  await openGroup($, m, 'misc')
+  expect(await hasText(m, /✓ 派遣官/)).toBe(false)      // nine and a refused one: not ten
+})
+
+const restLineRe = /连续工作一小时|休息一下对身体好|已工作一小时/
+const quietHour = async ($: any, on: any, touchAtMinute: number | null, continueAtMinute: number | null) => {
+  const clock = await engine($, on)
+  const m = await mount($, 'desktop')
+  await $.session.start({ source: 'startup', cwd: '/test' } as any)
+  await $.turn.start({ text: 'task', turnId: 'q0' } as any)
+  for (let minute = 1; minute <= 61; minute++) {
+    await clock.advance(60000)
+    if (minute === touchAtMinute) await $.ui.press({ plugin: 'pet', key: 'pat' })
+    if (minute === continueAtMinute) await $.turn.start({ text: '', turnId: 'q-cont' } as any)
+  }
+  await clock.advance(30000)
+  return count(m, restLineRe)
+}
+
+test('rest: the 45 minute line, from below (a click at minute 16: 44 minutes at the hour mark, the reminder comes)', { timeoutMs: 60000 }, async ($, on) => {
+  expect(await quietHour($, on, 16, null)).toBe(1)
+})
+
+test('rest: the 45 minute line, from above (a click at minute 14: 46 minutes at the hour mark, no reminder)', { timeoutMs: 60000 }, async ($, on) => {
+  expect(await quietHour($, on, 14, null)).toBe(0)
+})
+
+test('rest: a turn that continues by itself (no prompt text) is not you coming back', { timeoutMs: 60000 }, async ($, on) => {
+  expect(await quietHour($, on, null, 40)).toBe(0)
+})
+
+test('rest: turns that background tasks started are not "carrying on" after a reminder (no 不听劝)', { timeoutMs: 60000 }, async ($, on) => {
+  const clock = await engine($, on)
+  const m = await mount($, 'desktop')
+  await $.session.start({ source: 'startup', cwd: '/test' } as any)
+  await $.turn.start({ text: 'task', turnId: 'n0' } as any)
+  for (let i = 0; i < 7; i++) {
+    await clock.advance(10 * 60 * 1000)
+    if (i === 3) await $.ui.press({ plugin: 'pet', key: 'pat' })      // the person is there
+  }
+  await clock.advance(30000)
+  expect(await countBtn(m, /知道啦/)).toBe(1)      // the reminder is on
+  for (let i = 0; i < 6; i++) {
+    await $.prompt.submit({ text: 'a background task finished', origin: { kind: 'task-notification' }, wait: false } as any)
+    await $.turn.start({ text: 'a background task finished', turnId: 'n' + (i + 1) } as any)
+  }
+  await press($, 'ach')
+  await press($, 'ag-secret')
+  expect(await hasText(m, /✓ 不听劝/)).toBe(false)      // six turns the person did not start: not carrying on
 })

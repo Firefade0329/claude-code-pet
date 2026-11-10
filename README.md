@@ -4,7 +4,7 @@ A small plugin for Claude Code that puts a Q-version maid mascot above the promp
 
 > **Language note:** all in-app text (her lines, buttons, achievements) is **Chinese (简体中文)** for now. It is an unofficial community plugin and is not affiliated with Anthropic.
 
-> **Tested version / 已测试版本：Claude Code 2.1.308** (desktop; automated tests also on 2.1.304). **2.1.286 and earlier are no longer verified** (the layout uses `columnGap` / `rowGap` since 0.4.1). The terminal layout has only been checked by automated tests, not by eye. 其他版本未验证；终端版只在自动化测试里验证过，没有实际观察。
+> **Tested version / 已测试版本：Claude Code 2.1.321** (desktop; automated tests also on 2.1.292). **2.1.286 and earlier are no longer verified** (the layout uses `columnGap` / `rowGap` since 0.4.1). The terminal layout has only been checked by automated tests, not by eye. 其他版本未验证；终端版只在自动化测试里验证过，没有实际观察。
 
 ## 截图 / Screenshots
 
@@ -34,7 +34,7 @@ A small plugin for Claude Code that puts a Q-version maid mascot above the promp
 
 **助手们**（v0.6.0 起）：Claude 派出子 agent（包括工作流里的 agent）时，她身边会出现小助手，每个在跑的 agent 一个（最多画四个，再多就在角落显示数字）。有两个以上时，工作中的台词会换成“指挥官”的口气，并说有几个在干活。子 agent 自己调用工具不会改变她的姿势（只看她自己这一路）。agent 结束时小助手消失；被强行终止、没有正常结束的，半分钟检查一次，约一分半后清掉。只看 agent 的编号和状态，不读它们的任务内容。
 
-**等助手汇报**（v0.6.0 起）：她自己对 Agent、Task、Workflow、TaskOutput 这类工具的调用还没返回，或者这一轮已经结束、助手们还在后台跑时，她不再显示敲键盘，而是“等助手汇报”的姿势和台词（这时不会犯困）。助手们自己调用工具不算她在工作。
+**等助手汇报**（v0.6.0 起）：她自己对 Agent 工具的调用还没返回（旧版本的 Task、TaskOutput 也算），或者这一轮已经结束、助手们或工作流还在后台跑时，她不再显示敲键盘，而是“等助手汇报”的姿势和台词（这时不会犯困）。助手们自己的运行、自己调用工具，都不算她在工作，也不会改变她的姿势；助手都结束后她回到待机。
 
 **用量一览**：CTX（上下文）、5H、7D 三条进度条，5H/7D 的重置倒计时，缓存命中率，本会话花费，今日轮数/工具/番茄数。
 
@@ -93,7 +93,7 @@ A small plugin for Claude Code that puts a Q-version maid mascot above the promp
 **从旧版本升级**：升级前的存档会一次性把点数抬到“你当时等级在新规则下的门槛”，所以不会因为规则变化掉级。几个对话同时首次启动时也只会抬一次（0.5.1 起：目标始终按升级前的点数算，存档里会多一个 `legacyAffection`）。
 
 **提醒**
-- 连续工作 1 小时提醒休息（可点“知道啦”）。超过 15 分钟没动静就算休息、重新计时；一轮运行很久的任务算连续工作，但**你 45 分钟没发消息、也没点过她**，就当作你不在，不提醒，回来发第一条消息时重新开始计时（v0.6.0 起）；等你确认权限的时间不算。
+- 连续工作 1 小时提醒休息（可点“知道啦”）。超过 15 分钟没动静就算休息、重新计时；一轮运行很久的任务算连续工作，但**你 45 分钟没发消息、也没点过她**（算“点过她”的是摸头、戳、提醒上的“知道啦”、开始或放弃番茄钟；坐在电脑前只看不动超过 45 分钟，也会被当作不在），就当作你不在，不提醒，回来发第一条消息或点她时重新开始计时（v0.6.0 起）；由后台任务、定时任务或别的会话自己开始的一轮，不算你回来了（v0.6.1 起）；等你确认权限的时间不算。
 - 一轮任务超过 2 分钟，完成后有专属提醒。
 - 5 小时额度到 80%、上下文到 85% 时提醒（每次越过阈值提醒一次，回落到阈值以下 5 个百分点后会重新提醒；5 小时额度按重置周期，多个对话只提醒一次）。
 - 上下文到 80% 时出现“压缩上下文”按钮：只会把 `/compact ` 填进输入框，由你按回车确认，不会自动发送；输入框里已经有内容时不会覆盖，会提示你先发送或清空。
@@ -106,7 +106,7 @@ A small plugin for Claude Code that puts a Q-version maid mascot above the promp
 
 ## 安装
 
-需要一个带插件“hooks 模块”能力的 Claude Code（现在开发和测试用的是 **2.1.308**，自动化测试也在 2.1.304 上跑过；最早的 2.1.286 现在**没有再验证**，其他版本没有验证过）。
+需要一个带插件“hooks 模块”能力的 Claude Code（现在开发和测试用的是 **2.1.321**，自动化测试也在 2.1.292 上跑过；最早的 2.1.286 现在**没有再验证**，其他版本没有验证过）。
 
 方式一：单次会话加载
 
